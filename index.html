@@ -1603,11 +1603,18 @@ function updateAudio() {
   const silent = muted || game.state === 'over' || game.state === 'title';
   audio.master.gain.setTargetAtTime(silent ? 0 : (0.03 + ratio * 0.07) * load, t, 0.1);
 
-  // Mute the title tune too — but only on change, so the fade-in survives
+  // Mute the music too — but only on change, so the fade-in survives
   if (musicState && !musicState.stopping && musicState.muted !== muted) {
     musicState.muted = muted;
     musicState.bus.gain.cancelScheduledValues(t);
     musicState.bus.gain.setTargetAtTime(muted ? 0.0001 : musicState.track.volume, t, 0.12);
+  }
+
+  // Safety net: startMusic() refuses to run on a locked context, so if the run
+  // began while audio was still unlocking, the driving track would never start
+  // at all. Pick it up as soon as the context is live.
+  if (game.state === 'driving' && !musicState && !muted && audio.ctx.state === 'running') {
+    playTrack('drive');
   }
 }
 
@@ -1704,49 +1711,92 @@ const TRACKS = {
     ],
   },
 
-  // Driving music: bright major key, jazz sevenths, slap bass and offbeat
-  // chord stabs — the sunny arcade-racer idiom. I – vi – ii – V in F.
+  /* -----------------------------------------------------------------------
+     Driving music — the sunny Latin-fusion idiom Sega's OutRun ran on, in an
+     original tune rather than a transcription of one of theirs.
+
+     What makes that idiom sound like itself, and how each part is built here:
+       - Brisk major-key jazz harmony that never sits still: sixteen bars of
+         maj9 / m9 / dominant chords walking the circle of fifths, with an
+         eight-bar lift into C for the B section.
+       - A detuned twin-oscillator lead, the FM-synth brass of every arcade
+         board, doubled a few cents apart and fed through the slapback echo.
+       - A plucky filtered-sawtooth slap bass, syncopated off the downbeats.
+       - An electric-piano comp voiced two octaves up, hitting the
+         anticipations rather than the beats.
+       - Latin percussion: a sixteenth-note shaker under a 3-2 son clave on
+         the cowbell.
+     ----------------------------------------------------------------------- */
   drive: {
-    bpm: 128,
+    bpm: 136,
     volume: 0.15,          // sits under the engine rather than over it
     fadeIn: 1.0,
     arp: false,
-    stabs: [2, 6, 10, 14], // chord hits on the "and" of every beat
-    stabGain: 0.1,
+
+    // The Rhodes comp: anticipations, not beats — pushed off 2 and 4
+    stabs: [3, 6, 10, 14],
+    stabGain: 0.075,
     stabType: 'triangle',
+    stabOctave: 24,        // up where a right hand would voice it
+
     bassType: 'sawtooth',
     bassGain: 0.42,
     bassCutoff: 1400,      // brighter and pluckier than the title bass
-    bassDecay: 0.42,
-    leadType: 'square',
-    leadGain: 0.22,
+    bassDecay: 0.38,
 
+    leadType: 'sawtooth',
+    leadGain: 0.13,        // halved: two oscillators sound this note
+    leadDetune: 9,         // cents between the pair — the arcade lead shimmer
+
+    percGain: 0.16,
+
+    // Sixteen bars: eight in F, then a lift into C and back for the turnaround
     chords: [
-      { root: 41, tones: [0, 4, 7, 11] },   // Fmaj7
-      { root: 38, tones: [0, 3, 7, 10] },   // Dm7
-      { root: 43, tones: [0, 3, 7, 10] },   // Gm7
+      { root: 41, tones: [0, 4, 7, 11] },   // Fmaj9
+      { root: 46, tones: [0, 4, 7, 11] },   // Bbmaj9
+      { root: 45, tones: [0, 3, 7, 10] },   // Am7
+      { root: 38, tones: [0, 4, 7, 10] },   // D7    — secondary dominant
+      { root: 43, tones: [0, 3, 7, 10] },   // Gm9
+      { root: 36, tones: [0, 4, 7, 10] },   // C13
+      { root: 41, tones: [0, 4, 7, 11] },   // Fmaj9
       { root: 36, tones: [0, 4, 7, 10] },   // C7
-      { root: 41, tones: [0, 4, 7, 11] },   // Fmaj7
-      { root: 38, tones: [0, 3, 7, 10] },   // Dm7
-      { root: 34, tones: [0, 4, 7, 11] },   // Bbmaj7
-      { root: 36, tones: [0, 4, 7, 10] },   // C7
+      { root: 38, tones: [0, 3, 7, 10] },   // Dm9   — B section lifts
+      { root: 43, tones: [0, 4, 7, 10] },   // G9
+      { root: 36, tones: [0, 4, 7, 11] },   // Cmaj9
+      { root: 45, tones: [0, 3, 7, 10] },   // Am7
+      { root: 38, tones: [0, 3, 7, 10] },   // Dm9
+      { root: 43, tones: [0, 4, 7, 10] },   // G7
+      { root: 46, tones: [0, 4, 7, 11] },   // Bbmaj9
+      { root: 36, tones: [0, 4, 7, 10] },   // C7    — turnaround home to F
     ],
 
-    bass: [0, null, null, 12, null, null, 0, null, 7, null, null, 12, null, null, 0, null],
+    // Root, fifth and octave only, so one pattern works under every chord
+    bass: [0, null, null, 12, null, null, 7, null, 0, null, 12, null, null, 7, 0, null],
 
-    kick:  [0, 8, 11],
+    kick:  [0, 3, 8, 11],
     snare: [4, 12],
     hat:   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],  // 16th shaker
+    perc:  [0, 3, 6, 10, 12],                                       // 3-2 son clave
 
     lead: [
-      [[0, 77, 2], [2, 76, 1], [3, 72, 3], [6, 74, 2], [8, 72, 4], [12, 69, 2], [14, 72, 2]],
-      [[0, 74, 2], [2, 72, 1], [3, 69, 3], [6, 70, 2], [8, 69, 4], [12, 65, 4]],
-      [[0, 72, 2], [2, 70, 1], [3, 67, 3], [6, 69, 2], [8, 70, 4], [12, 74, 4]],
-      [[0, 76, 2], [2, 74, 1], [3, 72, 3], [6, 74, 2], [8, 76, 6], [14, 77, 2]],
-      [[0, 81, 2], [2, 79, 1], [3, 77, 3], [6, 76, 2], [8, 77, 4], [12, 72, 4]],
-      [[0, 79, 2], [2, 77, 1], [3, 74, 3], [6, 76, 2], [8, 74, 4], [12, 70, 4]],
-      [[0, 77, 2], [2, 74, 1], [3, 70, 3], [6, 72, 2], [8, 74, 4], [12, 77, 4]],
-      [[0, 76, 2], [2, 72, 2], [4, 74, 2], [6, 76, 2], [8, 79, 6], [14, 77, 2]],
+      // A section — the hook, climbing in sequence
+      [[0, 72, 2], [2, 76, 2], [4, 77, 4], [8, 79, 2], [10, 77, 2], [12, 76, 4]],
+      [[0, 74, 2], [2, 77, 2], [4, 79, 4], [8, 81, 2], [10, 79, 2], [12, 77, 4]],
+      [[0, 76, 2], [2, 79, 2], [4, 81, 3], [7, 79, 1], [8, 76, 4], [12, 72, 4]],
+      [[0, 74, 2], [2, 78, 2], [4, 81, 4], [8, 84, 4], [12, 81, 4]],
+      [[0, 82, 2], [2, 81, 1], [3, 79, 3], [6, 77, 2], [8, 79, 6], [14, 82, 2]],
+      [[0, 84, 2], [2, 82, 1], [3, 79, 3], [6, 76, 2], [8, 77, 4], [12, 79, 4]],
+      [[0, 77, 3], [4, 81, 2], [6, 84, 2], [8, 86, 6], [14, 84, 2]],
+      [[0, 82, 2], [2, 79, 2], [4, 76, 2], [6, 79, 2], [8, 84, 4], [12, 81, 4]],
+      // B section — same shapes an octave of attitude higher
+      [[0, 86, 2], [2, 84, 2], [4, 81, 4], [8, 84, 2], [10, 86, 2], [12, 88, 4]],
+      [[0, 86, 2], [2, 83, 2], [4, 86, 4], [8, 88, 2], [10, 86, 2], [12, 83, 4]],
+      [[0, 84, 2], [2, 86, 2], [4, 88, 4], [8, 86, 2], [10, 84, 2], [12, 83, 4]],
+      [[0, 81, 2], [2, 84, 2], [4, 86, 3], [7, 84, 1], [8, 81, 4], [12, 79, 4]],
+      [[0, 77, 2], [2, 81, 2], [4, 86, 4], [8, 84, 2], [10, 81, 2], [12, 77, 4]],
+      [[0, 79, 2], [2, 83, 2], [4, 86, 4], [8, 84, 4], [12, 83, 4]],
+      [[0, 82, 2], [2, 84, 2], [4, 86, 4], [8, 89, 4], [12, 86, 4]],
+      [[0, 88, 2], [2, 86, 2], [4, 84, 2], [6, 82, 2], [8, 79, 4], [12, 76, 4]],
     ],
   },
 };
@@ -1787,7 +1837,7 @@ function startMusic(name) {
   // voice they didn't have
   const leadBus = ctx.createGain();
   const delay = ctx.createDelay(1.0);
-  delay.delayTime.value = stepDuration() * 1.5;
+  delay.delayTime.value = stepDuration(track) * 1.5;
   const feedback = ctx.createGain();
   feedback.gain.value = 0.3;
   const echoLevel = ctx.createGain();
@@ -1875,17 +1925,23 @@ function scheduleStep(index, time, dur) {
 
   // --- Offbeat chord stabs: the whole voicing at once, short and bright ---
   if (track.stabs && track.stabs.includes(step)) {
+    const octave = track.stabOctave || 12;
     for (const tone of chord.tones) {
-      playTone(time, midiToFreq(chord.root + 12 + tone), dur * 1.4,
+      playTone(time, midiToFreq(chord.root + octave + tone), dur * 1.4,
                track.stabType, track.stabGain, musicState.bus);
     }
   }
 
-  // --- Lead ---
+  // --- Lead. A detuned pair reads as an FM arcade lead; one alone is a bleep ---
   for (const [at, note, len] of track.lead[bar]) {
     if (at === step) {
-      playTone(time, midiToFreq(note), dur * len * 0.9,
+      const freq = midiToFreq(note);
+      playTone(time, freq, dur * len * 0.9,
                track.leadType, track.leadGain, musicState.leadBus, true);
+      if (track.leadDetune) {
+        playTone(time, freq, dur * len * 0.9,
+                 track.leadType, track.leadGain, musicState.leadBus, true, track.leadDetune);
+      }
     }
   }
 
@@ -1893,14 +1949,16 @@ function scheduleStep(index, time, dur) {
   if (track.kick.includes(step))  playKick(time);
   if (track.snare.includes(step)) playNoiseHit(time, 0.14, 0.35, 1200);
   if (track.hat.includes(step))   playNoiseHit(time, 0.03, 0.07, 6000);
+  if (track.perc && track.perc.includes(step)) playCowbell(time, track.percGain);
 }
 
-function playTone(time, freq, dur, type, vol, dest, vibrato = false) {
+function playTone(time, freq, dur, type, vol, dest, vibrato = false, detune = 0) {
   const ctx = audio.ctx;
 
   const osc = ctx.createOscillator();
   osc.type = type;
   osc.frequency.setValueAtTime(freq, time);
+  if (detune) osc.detune.setValueAtTime(detune, time);
   if (vibrato) musicState.lfoDepth.connect(osc.detune);
 
   const gain = ctx.createGain();
@@ -1930,6 +1988,36 @@ function playKick(time) {
   gain.connect(musicState.bus);
   osc.start(time);
   osc.stop(time + 0.18);
+}
+
+/**
+ * Cowbell: two detuned square waves in a clangy, deliberately non-harmonic
+ * ratio, gated hard. The drum-machine trick, and the backbone of the Latin
+ * percussion the arcade racers all rode on.
+ */
+function playCowbell(time, vol = 0.16) {
+  const ctx = audio.ctx;
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(vol, time);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.12);
+
+  const band = ctx.createBiquadFilter();
+  band.type = 'bandpass';
+  band.frequency.value = 620;
+  band.Q.value = 1.6;
+
+  for (const freq of [540, 800]) {
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(freq, time);
+    osc.connect(band);
+    osc.start(time);
+    osc.stop(time + 0.14);
+  }
+
+  band.connect(gain);
+  gain.connect(musicState.bus);
 }
 
 /** Snare and hi-hat are the same burst with different length and cutoff. */

@@ -284,9 +284,10 @@ voice and the reason it never clicks between steps.
 Two tracks share that engine, and neither is code — a track is a `TRACKS` entry
 holding chords (root + semitone offsets), step-indexed patterns, and switches
 for which voices are in play. `scheduleStep()` reads it all from
-`musicState.track`, so the title tune (minor, arpeggio-driven) and the driving
-tune (major sevenths, slap bass, offbeat stabs) are the same code path with
-different data. `playTrack()` cross-fades between them.
+`musicState.track`, so the title tune (eight bars, minor, arpeggio-driven) and
+the driving tune (sixteen bars of major-key jazz harmony, detuned lead, slap
+bass, clave) are the same code path with different data — including their
+length, which is just `chords.length`. `playTrack()` cross-fades between them.
 
 Timing uses the standard lookahead pattern: a 25 ms `setInterval` decides
 *what* to play and hands WebAudio precise timestamps for *when*. The audio clock
@@ -298,6 +299,12 @@ which collides with wanting music on the title screen. The compromise:
 keypress calls `wakeAudio()`, which starts the tune and *doesn't* start the
 game. The next key drives. If WebAudio is unavailable entirely, `wakeAudio()`
 returns false and the first key drives immediately — no dead end.
+
+The gap in that dance: `ctx.resume()` is async, so a fast second keypress can
+start the run while the context is still unlocking, and `startMusic()` refuses
+to run on a suspended context. Nothing would retry, leaving that whole run
+silent. `updateAudio()` closes it — if the car is driving with no music and the
+context has since gone live, it picks the driving track up.
 
 ---
 

@@ -226,18 +226,34 @@ on the SID:
 
 Eight bars in A minor, `i – VI – VII – i / iv – VI – VII – V`, at 138 BPM.
 
-**Driving** — the sunny arcade-racer idiom instead: bright F major with jazz
-seventh voicings (`Fmaj7 – Dm7 – Gm7 – C7`), a plucky filtered-sawtooth slap
-bass, chord stabs on the "and" of every beat, and a 16th-note shaker. 128 BPM,
-mixed at 0.15 so it sits under the engine rather than over it. It fades out as
-you crash and cross-fades back in when you continue.
+**Driving** — the sunny Latin-fusion idiom Sega's OutRun ran on. An original
+tune in that style, not a transcription of one of theirs:
+
+- **Sixteen bars** of brisk major-key jazz harmony that never sits still —
+  maj9 / m9 / dominant chords walking the circle of fifths, with an eight-bar
+  lift into C for the B section before the turnaround home to F
+- A **detuned twin-oscillator lead** — two sawtooths nine cents apart through
+  the slapback echo, standing in for the FM brass every arcade board had. One
+  oscillator alone is a bleep; the pair is a lead.
+- A plucky filtered-sawtooth **slap bass**, syncopated off the downbeats and
+  built from roots, fifths and octaves so one pattern works under every chord
+- An **electric-piano comp** voiced two octaves up, hitting the anticipations
+  rather than the beats
+- **Latin percussion**: a 16th-note shaker under a 3-2 son clave played on a
+  cowbell (two detuned squares in a clangy ratio through a bandpass — the
+  drum-machine trick)
+
+136 BPM, a 28-second loop, mixed at 0.15 so it sits under the engine rather
+than over it. It fades out as you crash and cross-fades back in when you
+continue.
 
 A lookahead scheduler (`setInterval` decides *what*, WebAudio decides *when*)
 keeps both in time regardless of frame rate.
 
 To write your own, edit a track in `TRACKS`: `chords` are a root plus semitone
-offsets, `bass`/`kick`/`snare`/`hat` are indexed by sixteenth-note step, and
-`lead` entries are `[step, MIDI note, length in steps]`.
+offsets, `bass`/`kick`/`snare`/`hat`/`perc` are indexed by sixteenth-note step,
+and `lead` entries are `[step, MIDI note, length in steps]`. A track can be any
+number of bars long — `lead` just needs one entry per chord.
 
 ---
 
