@@ -354,6 +354,71 @@
     font-weight: 600;
   }
 
+  /* ---- Audio settings, on the title screen ---- */
+  #audio-settings {
+    margin-top: 26px;
+    padding: 14px 20px 15px;
+    border-radius: 14px;
+    background: var(--ui-panel);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--ui-border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 268px;
+  }
+
+  .mix-row {
+    display: grid;
+    grid-template-columns: 14px 62px 1fr 40px;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ui-dim);
+    transition: color 0.18s ease;
+  }
+
+  /* The caret marks the row the arrow keys are pointed at */
+  .mix-row .caret { opacity: 0; transition: opacity 0.18s ease; }
+  .mix-row.selected { color: var(--ui-fg); }
+  .mix-row.selected .caret { opacity: 1; }
+
+  .meter {
+    display: flex;
+    gap: 3px;
+  }
+
+  .meter i {
+    flex: 1;
+    height: 12px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.13);
+    transition: background 0.12s ease;
+  }
+
+  .meter i.on { background: rgba(244, 247, 251, 0.55); }
+  .mix-row.selected .meter i.on { background: var(--ui-fg); }
+
+  .mix-value {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    letter-spacing: 0;
+  }
+
+  .mix-row.off .mix-value { color: rgba(255, 160, 160, 0.75); }
+
+  #audio-settings .legend {
+    margin-top: 3px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--ui-dim);
+    text-align: center;
+    text-transform: none;
+  }
+
   #muted-tag {
     position: fixed;
     bottom: 20px;
@@ -407,6 +472,22 @@
 <div id="title">
   <h1>Hakan's Carpool</h1>
   <p id="title-hint">Press any key to start</p>
+
+  <div id="audio-settings">
+    <div class="mix-row selected" id="mix-music">
+      <span class="caret">▸</span>
+      <span>Music</span>
+      <span class="meter"></span>
+      <span class="mix-value">0%</span>
+    </div>
+    <div class="mix-row" id="mix-engine">
+      <span class="caret">▸</span>
+      <span>Engine</span>
+      <span class="meter"></span>
+      <span class="mix-value">0%</span>
+    </div>
+    <div class="legend"><kbd>↑</kbd><kbd>↓</kbd> pick &nbsp;·&nbsp; <kbd>←</kbd><kbd>→</kbd> adjust</div>
+  </div>
 </div>
 
 <div id="hint" class="panel">
@@ -549,6 +630,26 @@ const game = {
 const keys = { accelerate: false, brake: false };
 let muted = false;
 
+/* -------------------------------------------------------------------------
+   Audio levels — two independent mixes, set from the title screen and kept
+   in localStorage. Both are 0..1 in eleven steps, so the meter on screen and
+   the stored value are the same thing.
+   ------------------------------------------------------------------------- */
+const MIX_KEY   = 'endlessDriveMix';
+const MIX_STEPS = 10;
+
+const mix = { music: 0.7, engine: 0.8 };
+let mixRow = 'music';          // which row the arrow keys are pointed at
+let enginePreviewUntil = 0;    // the engine is silent on the title, so previews
+
+try {
+  const saved = JSON.parse(localStorage.getItem(MIX_KEY) || 'null');
+  if (saved) {
+    if (Number.isFinite(saved.music))  mix.music  = clamp(saved.music, 0, 1);
+    if (Number.isFinite(saved.engine)) mix.engine = clamp(saved.engine, 0, 1);
+  }
+} catch (e) { /* corrupt or blocked storage — the defaults are fine */ }
+
 // Reusable temporaries so the loop allocates nothing
 const _camTarget  = new THREE.Vector3();
 const _lookTarget = new THREE.Vector3();
@@ -593,6 +694,8 @@ const ui = {
   titleHint:   document.getElementById('title-hint'),
   hint:        document.getElementById('hint'),
   mutedTag:    document.getElementById('muted-tag'),
+  mixRows:     { music:  document.getElementById('mix-music'),
+                 engine: document.getElementById('mix-engine') },
 };
 let lastKmh = -1, lastScore = -1, lastGear = -1, lastLapSecond = -1;  // avoid needless DOM writes
 let runId = 1;                                                       // identifies the current run
@@ -697,6 +800,7 @@ function init() {
 
   updateWorld();          // place everything before the first frame
   updateScoreHUD(true);
+  buildMixMeters();
 
   window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onKeyDown);
@@ -1554,6 +1658,12 @@ function initAudio() {
   master.gain.value = 0;
   master.connect(ctx.destination);
 
+  // Every tune plays through this, so the music level is one node that
+  // outlives any individual track's bus and its fades.
+  const musicMaster = ctx.createGain();
+  musicMaster.gain.value = mix.music;
+  musicMaster.connect(ctx.destination);
+
   const filter = ctx.createBiquadFilter();
   filter.type = 'lowpass';
   filter.frequency.value = 600;
@@ -1576,7 +1686,7 @@ function initAudio() {
   subGain.connect(filter);
   sub.start();
 
-  audio = { ctx, master, filter, osc, sub };
+  audio = { ctx, master, musicMaster, filter, osc, sub };
 }
 
 /** Maps speed to pitch with five fake gears, so the engine climbs and shifts. */
@@ -1599,9 +1709,13 @@ function updateAudio() {
     380 + ratio * 2400 + (keys.accelerate ? 700 : 0), t, 0.08
   );
 
+  // The engine is silent on the title screen, so setting its level there would
+  // be deaf work — adjusting it revs a short preview instead.
+  const previewing = game.state === 'title' && t < enginePreviewUntil;
   const load = keys.accelerate ? 1.25 : 0.8;
-  const silent = muted || game.state === 'over' || game.state === 'title';
-  audio.master.gain.setTargetAtTime(silent ? 0 : (0.03 + ratio * 0.07) * load, t, 0.1);
+  const silent = muted || game.state === 'over' || (game.state === 'title' && !previewing);
+  const level = previewing ? 0.075 : (0.03 + ratio * 0.07) * load;
+  audio.master.gain.setTargetAtTime(silent ? 0 : level * mix.engine, t, 0.1);
 
   // Mute the music too — but only on change, so the fade-in survives
   if (musicState && !musicState.stopping && musicState.muted !== muted) {
@@ -1619,7 +1733,7 @@ function updateAudio() {
 }
 
 function playCrashSound() {
-  if (!audio || muted) return;
+  if (!audio || muted || mix.engine <= 0) return;
   const ctx = audio.ctx;
 
   // A short burst of decaying white noise
@@ -1639,7 +1753,7 @@ function playCrashSound() {
   filter.frequency.value = 1400;
 
   const gain = ctx.createGain();
-  gain.gain.value = 0.5;
+  gain.gain.value = 0.5 * mix.engine;   // the crash is a car sound, not music
 
   src.connect(filter);
   filter.connect(gain);
@@ -1825,7 +1939,7 @@ function startMusic(name) {
   const bus = ctx.createGain();
   bus.gain.setValueAtTime(0.0001, now);
   bus.gain.exponentialRampToValueAtTime(track.volume, now + track.fadeIn);
-  bus.connect(ctx.destination);
+  bus.connect(audio.musicMaster);       // the music level rides on top of this
 
   // Bass voice — filtered to keep it thick rather than buzzy
   const bassBus = ctx.createBiquadFilter();
@@ -2087,6 +2201,69 @@ function wakeAudio() {
   else begin();
 
   return true;
+}
+
+/* =========================================================================
+   AUDIO SETTINGS — the two-row mixer on the title screen
+   =========================================================================
+   Music and engine are separate mixes: the music level is one persistent
+   gain node every track plays through, the engine level scales the gain
+   updateAudio() already computes each frame. Keyboard only, arrow keys, and
+   they're the one set of keys on the title screen that doesn't start the
+   game. Both levels persist in localStorage.
+   ========================================================================= */
+function buildMixMeters() {
+  for (const row of Object.values(ui.mixRows)) {
+    const meter = row.querySelector('.meter');
+    for (let i = 0; i < MIX_STEPS; i++) meter.appendChild(document.createElement('i'));
+  }
+  renderMix();
+}
+
+function renderMix() {
+  for (const [name, row] of Object.entries(ui.mixRows)) {
+    const value = mix[name];
+    const lit = Math.round(value * MIX_STEPS);
+
+    row.classList.toggle('selected', name === mixRow);
+    row.classList.toggle('off', value <= 0);
+    row.querySelector('.mix-value').textContent = value <= 0 ? 'off' : Math.round(value * 100) + '%';
+
+    const bars = row.querySelectorAll('.meter i');
+    for (let i = 0; i < bars.length; i++) bars[i].classList.toggle('on', i < lit);
+  }
+}
+
+function selectMixRow(delta) {
+  const names = Object.keys(ui.mixRows);
+  const next = (names.indexOf(mixRow) + delta + names.length) % names.length;
+  mixRow = names[next];
+  renderMix();
+}
+
+/** Steps the selected level, applies it live, and remembers it. */
+function adjustMix(delta) {
+  mix[mixRow] = clamp(mix[mixRow] + delta / MIX_STEPS, 0, 1);
+  applyMix();
+  renderMix();
+
+  // Rev the engine briefly so the engine level is audible while you set it
+  if (mixRow === 'engine' && audio && game.state === 'title') {
+    enginePreviewUntil = audio.ctx.currentTime + 0.9;
+  }
+
+  try { localStorage.setItem(MIX_KEY, JSON.stringify(mix)); } catch (e) { /* storage blocked */ }
+}
+
+/** Pushes the music level to the node; the engine level is read per frame. */
+function applyMix() {
+  if (!audio) return;
+  audio.musicMaster.gain.setTargetAtTime(mix.music, audio.ctx.currentTime, 0.05);
+}
+
+function toggleMute() {
+  muted = !muted;
+  ui.mutedTag.style.display = muted ? 'block' : 'none';
 }
 
 /* =========================================================================
@@ -2373,6 +2550,31 @@ function onKeyDown(event) {
   // --- Title screen: first press wakes the tune, the next one drives ---
   if (game.state === 'title') {
     if (event.code === 'Space') event.preventDefault();
+
+    // The mixer owns the arrows and the mute key here — they're the only keys
+    // that don't start the game. Each still counts as the gesture that unlocks
+    // audio, so you can hear what you're setting.
+    switch (event.code) {
+      case 'ArrowUp':
+      case 'ArrowDown':
+        event.preventDefault();
+        wakeAudio();
+        selectMixRow(event.code === 'ArrowUp' ? -1 : 1);
+        return;
+
+      case 'ArrowLeft':
+      case 'ArrowRight':
+        event.preventDefault();
+        wakeAudio();
+        adjustMix(event.code === 'ArrowRight' ? 1 : -1);
+        return;
+
+      case 'KeyN':
+        wakeAudio();
+        toggleMute();
+        return;
+    }
+
     if (wakeAudio()) return;      // this press started the music
     startGame();
     return;
@@ -2413,8 +2615,7 @@ function onKeyDown(event) {
       break;
 
     case 'KeyN':
-      muted = !muted;
-      ui.mutedTag.style.display = muted ? 'block' : 'none';
+      toggleMute();
       break;
   }
 }

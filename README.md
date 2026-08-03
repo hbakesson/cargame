@@ -47,6 +47,8 @@ Firefox 108+, Safari 16.4+.
 | `N` | Mute / unmute |
 | `SPACE` | After a crash: continue the run |
 | `R` | After a crash: start over |
+| `↑` `↓` | On the title screen: pick the music or engine level |
+| `←` `→` | On the title screen: turn that level down or up |
 
 Steering is lane-based: one tap moves you one lane and the car slides across
 on its own. Tap twice quickly to cross two lanes. Holding the key does nothing
@@ -60,6 +62,22 @@ The title screen cruises along on its own while a C64-style tune plays. Because
 browsers block audio until you interact with the page, the **first** keypress
 wakes the music and the **next** one starts the drive — or click anywhere to
 start the tune without leaving the title screen.
+
+### Audio levels
+
+The title screen carries a two-row mixer. **Music** and **engine** are separate
+levels, each in ten steps from off to 100%:
+
+- `↑` / `↓` picks a row, `←` / `→` turns it down or up
+- Those four keys are the only ones on the title screen that *don't* start the
+  drive, so you can set levels before you go. `N` mutes there too.
+- The engine is silent on the title screen, so nudging its level revs a short
+  preview — you hear what you're setting instead of guessing
+- Both levels are saved in `localStorage` and are there next time
+
+The music level is one gain node every track plays through, so it survives the
+cross-fade between tunes. The engine level scales the engine and the crash
+sound. Muting with `N` is separate and overrides both.
 
 ---
 

@@ -306,6 +306,16 @@ to run on a suspended context. Nothing would retry, leaving that whole run
 silent. `updateAudio()` closes it — if the car is driving with no music and the
 context has since gone live, it picks the driving track up.
 
+**Two mixes, two mechanisms.** Music and engine levels are independent, and
+they're set from a keyboard-only mixer on the title screen. They work
+differently because the two signal paths do: the music level is a single
+persistent `audio.musicMaster` gain node that every track's bus connects into,
+so it outlives any one track and its fades, while the engine level simply
+scales the gain `updateAudio()` already recomputes each frame. Mute is a third
+thing on top of both. The title screen is also where the engine is deliberately
+silent, so adjusting its level rings a short preview through the same node —
+otherwise you'd be setting a level you can't hear.
+
 ---
 
 ## Where to add things
@@ -318,6 +328,7 @@ context has since gone live, it picks the driving track up.
 | A new game state | a branch in `animate()` and in `updatePhysics()`'s input gate |
 | New HUD | an element in `ui`, and a change-guarded write (never `innerHTML` per frame) |
 | A different tune | a `TRACKS` entry — plain data — then `playTrack('name')` |
+| A new audio level | a key in `mix`, a `.mix-row` in `#audio-settings`, and somewhere to read it |
 
 Two rules worth keeping:
 
