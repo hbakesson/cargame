@@ -1603,18 +1603,11 @@ function updateAudio() {
   const silent = muted || game.state === 'over' || game.state === 'title';
   audio.master.gain.setTargetAtTime(silent ? 0 : (0.03 + ratio * 0.07) * load, t, 0.1);
 
-  // Mute the music too — but only on change, so the fade-in survives
+  // Mute the title tune too — but only on change, so the fade-in survives
   if (musicState && !musicState.stopping && musicState.muted !== muted) {
     musicState.muted = muted;
     musicState.bus.gain.cancelScheduledValues(t);
     musicState.bus.gain.setTargetAtTime(muted ? 0.0001 : musicState.track.volume, t, 0.12);
-  }
-
-  // Safety net: startMusic() refuses to run on a locked context, so if the run
-  // began while audio was still unlocking, the driving track would never start
-  // at all. Pick it up as soon as the context is live.
-  if (game.state === 'driving' && !musicState && audio.ctx.state === 'running') {
-    playTrack('drive');
   }
 }
 
