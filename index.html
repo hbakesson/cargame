@@ -334,13 +334,13 @@ const CONFIG = {
   maxReverseSpeed: 9,
 
   // --- Steering ---
-  steerRate:      2.6,    // how fast heading builds while steering
-  steerReturn:    3.4,    // how fast heading self-centers
-  maxHeading:     0.45,   // radians — the car can never swing fully sideways
-  steerMinSpeed:  0.05,   // speed fraction below which steering barely bites
+  steerRate:      3.9,    // how fast heading builds while steering
+  steerReturn:    4.4,    // how fast heading self-centers
+  maxHeading:     0.62,   // radians — the car can never swing fully sideways
+  steerMinSpeed:  0.03,   // speed fraction below which steering barely bites
   steerHighSpeedFalloff: 0,  // 0 = full authority at top speed (raise toward
                              // 0.45 to make the car calmer when flat out)
-  gripLag:        7,      // lateral velocity response — lower = more slide
+  gripLag:        11,     // lateral velocity response — lower = more slide
   curveDrift:     1.0,    // how hard road curvature pushes the car outward
 
   wheelRadius:    0.42,
@@ -1091,7 +1091,7 @@ function updatePhysics(dt) {
   car.rotation.z = THREE.MathUtils.lerp(car.rotation.z, p.heading * 0.22, 1 - Math.exp(-8 * dt));
 
   // Front wheels turn slightly with the steering input
-  const targetSteerAngle = -p.steerInput * 0.45;
+  const targetSteerAngle = -p.steerInput * 0.55;
   const wheelBlend = 1 - Math.exp(-12 * dt);
   frontLeftPivot.rotation.y  = THREE.MathUtils.lerp(frontLeftPivot.rotation.y,  targetSteerAngle, wheelBlend);
   frontRightPivot.rotation.y = THREE.MathUtils.lerp(frontRightPivot.rotation.y, targetSteerAngle, wheelBlend);
