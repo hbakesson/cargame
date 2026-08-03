@@ -62,3 +62,39 @@ Do not use external game engines or physics libraries—only Three.js.
 Keep the code clean, commented, and easy to extend.
 
 The finished result should feel like a simple endless driving game where the player continuously drives down an infinite highway.
+
+---
+
+Improvement advice (from review of the first version):
+
+I haven't playtested it in a browser, so this is read from the code — worth driving it first to see which of these you actually feel.
+
+Highest impact: there's no game yet
+
+Right now it's a driving toy — nothing to win or lose. The single biggest change is a fail state:
+
+- Traffic cars to dodge. Reuse the segment-recycling pool: spawn a car in a random lane per segment, moving slower than you. Collision = AABB overlap on car.position.x vs. their x, plus z-proximity. This alone turns it into a game.
+- Score = distance travelled, with a multiplier for speed and near-misses. You already accumulate forward in updatePhysics — sum it into a distance variable.
+- Then: crash → slow-mo, screen shake, restart on SPACE. Persist a high score in localStorage.
+
+Second: the driving feel
+
+- A brake/reverse key. Right now S/DOWN does nothing and the only way to slow down is to stop accelerating. friction at 9 u/s² means ~7 seconds from top speed — sluggish when you need to react.
+- Lateral inertia. p.x moves purely from heading with no momentum, so releasing A/D snaps you straight. Adding a small lateral velocity that decays would give the car weight and make lane changes feel like a maneuver rather than a slider.
+- The high-speed steering falloff may be backwards for fun. highSpeedFalloff cuts turning by 45% at top speed — realistic-ish, but it means the game gets easier to keep steady exactly when it should feel hairiest. Try removing it and see which you prefer.
+
+Third: sense of speed
+
+The current cues are trees plus a 10° FOV stretch. Cheap additions, roughly in order of payoff per line of code:
+- Curves in the road. Give each segment a slight x-offset that varies with distance, and shift the whole road laterally as it scrolls. Straight-line driving gets boring in about 40 seconds.
+- Speed lines or motion blur at high speed — even a few semi-transparent streaked planes near the camera.
+- Camera lag on turns: let the camera trail the car's lateral position more slowly (drop physics.x * 0.55 to something lower at speed) so hard steering swings the view.
+- Engine audio. A single oscillator in the WebAudio API with pitch mapped to currentSpeed does more for perceived speed than any visual here.
+
+Smaller cleanups
+
+- updateHUD() writes innerHTML every frame, forcing a parse of <span>km/h</span> 60×/sec. Split the number into its own element and set textContent.
+- populateSegment() calls props.clear() and rebuilds ~10 objects every recycle — at top speed that's a segment every ~0.7s. Fine now; if you add many more props, pool them instead of allocating.
+- The .claude/ directory and index.html aren't committed yet.
+
+If you want, I can implement the traffic + score + crash loop — that's the change that makes it a game.

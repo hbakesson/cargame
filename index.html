@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Endless Drive — Three.js</title>
+<title>Hakan's Carpool</title>
 <style>
   :root {
     --ui-fg: #f4f7fb;
-    --ui-dim: rgba(244, 247, 251, 0.65);
+    --ui-dim: rgba(244, 247, 251, 0.62);
     --ui-panel: rgba(12, 18, 28, 0.42);
+    --ui-border: rgba(255, 255, 255, 0.16);
   }
 
   html, body {
@@ -22,29 +23,28 @@
 
   canvas { display: block; }
 
-  /* ---- Speed HUD (top-left) ---- */
-  #hud {
+  .panel {
     position: fixed;
-    top: 18px;
-    left: 18px;
     padding: 14px 18px 16px;
     border-radius: 14px;
     background: var(--ui-panel);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    border: 1px solid var(--ui-border);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
     user-select: none;
     pointer-events: none;
-    min-width: 168px;
   }
 
-  #speed-label {
+  .label {
     font-size: 11px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--ui-dim);
   }
+
+  /* ---- Speed (top-left) ---- */
+  #hud { top: 18px; left: 18px; min-width: 168px; }
 
   #speed-value {
     font-variant-numeric: tabular-nums;
@@ -54,7 +54,7 @@
     margin-top: 2px;
   }
 
-  #speed-value span {
+  #speed-value small {
     font-size: 15px;
     font-weight: 500;
     color: var(--ui-dim);
@@ -77,22 +77,161 @@
     transition: width 0.06s linear;
   }
 
+  #gear {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--ui-dim);
+    letter-spacing: 0.08em;
+  }
+
+  /* ---- Score (top-right) ---- */
+  #score-panel { top: 18px; right: 18px; min-width: 150px; text-align: right; }
+
+  #score-value {
+    font-variant-numeric: tabular-nums;
+    font-size: 34px;
+    font-weight: 650;
+    line-height: 1.1;
+    margin-top: 2px;
+  }
+
+  #best-value {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--ui-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Near-miss popup ---- */
+  #nearmiss {
+    position: fixed;
+    top: 44%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #ffe37a;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  #nearmiss.show { animation: pop 0.85s ease-out; }
+
+  @keyframes pop {
+    0%   { opacity: 0; transform: translate(-50%, -40%) scale(0.85); }
+    18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+    100% { opacity: 0; transform: translate(-50%, -72%) scale(1); }
+  }
+
+  /* ---- Crash vignette ---- */
+  #vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(ellipse at center, rgba(255, 40, 30, 0) 35%, rgba(190, 20, 15, 0.85) 100%);
+    transition: opacity 0.25s ease-out;
+  }
+
+  #vignette.show { opacity: 1; }
+
+  /* ---- Game over ---- */
+  #gameover {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(8, 12, 20, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+    user-select: none;
+  }
+
+  #gameover.show { opacity: 1; }
+
+  #gameover h1 {
+    margin: 0;
+    font-size: 52px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  #final-score {
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #final-best { font-size: 14px; color: var(--ui-dim); font-variant-numeric: tabular-nums; }
+
+  #new-best {
+    margin-top: 4px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffe37a;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    display: none;
+  }
+
+  #restart-hint { margin-top: 18px; font-size: 14px; color: var(--ui-dim); }
+
+  /* ---- Start title ---- */
+  #title {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    pointer-events: none;
+    user-select: none;
+    transition: opacity 0.8s ease;
+  }
+
+  #title.fade { opacity: 0; }
+
+  #title h1 {
+    margin: 0;
+    font-size: clamp(38px, 9vw, 92px);
+    font-weight: 750;
+    letter-spacing: -0.03em;
+    text-shadow: 0 6px 34px rgba(0, 0, 0, 0.45);
+  }
+
+  #title p {
+    margin: 0;
+    font-size: 15px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+    animation: blink 1.6s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 0.45; }
+    50%      { opacity: 1; }
+  }
+
   /* ---- Controls hint ---- */
   #hint {
-    position: fixed;
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
     padding: 10px 16px;
     border-radius: 12px;
-    background: var(--ui-panel);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.16);
     font-size: 13px;
     color: var(--ui-dim);
-    user-select: none;
-    pointer-events: none;
     transition: opacity 0.6s ease;
   }
 
@@ -111,19 +250,56 @@
     font-size: 12px;
     font-weight: 600;
   }
+
+  #muted-tag {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    font-size: 12px;
+    color: var(--ui-dim);
+    user-select: none;
+    pointer-events: none;
+    display: none;
+  }
 </style>
 </head>
 <body>
 
-<div id="hud">
-  <div id="speed-label">Speed</div>
-  <div id="speed-value">0<span>km/h</span></div>
+<div id="hud" class="panel">
+  <div class="label">Speed</div>
+  <div id="speed-value"><span id="speed-number">0</span><small>km/h</small></div>
   <div id="speed-bar"><div id="speed-bar-fill"></div></div>
+  <div id="gear">GEAR <span id="gear-number">1</span></div>
 </div>
 
-<div id="hint">
-  <kbd>SPACE</kbd> accelerate &nbsp;·&nbsp; <kbd>A</kbd> steer left &nbsp;·&nbsp; <kbd>D</kbd> steer right
+<div id="score-panel" class="panel">
+  <div class="label">Score</div>
+  <div id="score-value">0</div>
+  <div id="best-value">Best 0</div>
 </div>
+
+<div id="nearmiss">NEAR MISS +75</div>
+<div id="vignette"></div>
+
+<div id="gameover">
+  <h1>CRASHED</h1>
+  <div id="final-score">Score 0</div>
+  <div id="final-best">Best 0</div>
+  <div id="new-best">New best!</div>
+  <div id="restart-hint">Press <kbd>SPACE</kbd> or <kbd>R</kbd> to drive again</div>
+</div>
+
+<div id="title">
+  <h1>Hakan's Carpool</h1>
+  <p>Press Space to drive</p>
+</div>
+
+<div id="hint" class="panel">
+  <kbd>SPACE</kbd> accelerate &nbsp;·&nbsp; <kbd>S</kbd> brake / reverse &nbsp;·&nbsp;
+  <kbd>A</kbd> left &nbsp;·&nbsp; <kbd>D</kbd> right &nbsp;·&nbsp; <kbd>M</kbd> mute
+</div>
+
+<div id="muted-tag">MUTED</div>
 
 <!-- Three.js as an ES module from CDN (no game engine, no physics library) -->
 <script type="importmap">
@@ -143,74 +319,133 @@ import * as THREE from 'three';
 const CONFIG = {
   // --- Road layout ---
   laneCount:      3,
-  laneWidth:      4,      // world units per lane
-  segmentLength:  40,     // length of one recycled road chunk
-  segmentCount:   14,     // chunks alive at once (560 units of visible road)
+  laneWidth:      4,
+  segmentLength:  25,     // shorter chunks keep curved joints tight
+  segmentCount:   26,     // 650 units of road alive at once
+  behindCamera:   60,     // how much road is kept behind the car
 
-  // --- Arcade physics ---
-  maxSpeed:       60,     // units/second (~216 km/h)
-  acceleration:   16,     // units/second² while SPACE is held
-  friction:       9,      // constant rolling deceleration when coasting
-  airDrag:        0.15,   // extra deceleration proportional to speed
+  // --- Longitudinal physics ---
+  maxSpeed:       62,     // units/second (~223 km/h)
+  acceleration:   17,     // units/second² on the throttle
+  friction:       8,      // constant rolling deceleration when coasting
+  airDrag:        0.16,   // extra deceleration proportional to speed
+  brakeForce:     34,     // deceleration while braking
+  reverseAccel:   9,
+  maxReverseSpeed: 9,
 
-  steerRate:      2.4,    // how fast heading builds while steering
-  steerReturn:    3.2,    // how fast heading self-centers when not steering
-  maxHeading:     0.42,   // radians — the car can never swing fully sideways
-  steerMinSpeed:  0.06,   // speed fraction below which steering barely bites
+  // --- Steering ---
+  steerRate:      2.6,    // how fast heading builds while steering
+  steerReturn:    3.4,    // how fast heading self-centers
+  maxHeading:     0.45,   // radians — the car can never swing fully sideways
+  steerMinSpeed:  0.05,   // speed fraction below which steering barely bites
+  steerHighSpeedFalloff: 0,  // 0 = full authority at top speed (raise toward
+                             // 0.45 to make the car calmer when flat out)
+  gripLag:        7,      // lateral velocity response — lower = more slide
+  curveDrift:     1.0,    // how hard road curvature pushes the car outward
 
   wheelRadius:    0.42,
 
   // --- Chase camera ---
   camHeight:      4.2,
-  camDistance:    9.5,
-  camLookAhead:  -9,      // how far in front of the car the camera aims
-  camLerp:        4.5,    // smoothing strength (higher = snappier)
+  camDistance:    9.6,
+  camLookAhead:  -10,
+  camLerp:        4.5,
+  camLateralLag:  2.2,    // lower = camera trails harder through turns
   baseFov:        62,
+
+  // --- Traffic ---
+  trafficCount:    9,
+  trafficMinSpeed: 13,
+  trafficMaxSpeed: 34,
+  spawnMin:        170,   // respawn distance ahead of the player
+  spawnMax:        640,
+
+  // --- Scoring ---
+  pointsPerUnit:   0.55,  // base score rate per unit travelled
+  nearMissDist:    3.4,
+  nearMissBonus:   75,
 
   // --- Look ---
   skyColor:       0x8ec5e8,
-  fogNear:        120,
-  fogFar:         420,
+  fogNear:        130,
+  fogFar:         430,
 };
 
 // Derived road measurements
 const ROAD_WIDTH     = CONFIG.laneCount * CONFIG.laneWidth;   // 12
 const ROAD_HALF      = ROAD_WIDTH / 2;
-const SHOULDER       = 1.6;                                   // paved margin outside the lanes
+const SHOULDER       = 1.6;
 const TOTAL_ROAD_LEN = CONFIG.segmentCount * CONFIG.segmentLength;
+const LANE_X = Array.from(
+  { length: CONFIG.laneCount },
+  (_, i) => -ROAD_HALF + (i + 0.5) * CONFIG.laneWidth
+);
+
+// Collision half-extents (car is 2.0 wide, 4.4 long)
+const CAR_HALF_W = 1.0;
+const CAR_HALF_L = 2.2;
 
 /* =========================================================================
    STATE
    ========================================================================= */
 let renderer, scene, camera, clock;
-let car, frontLeftPivot, frontRightPivot;
-let wheelMeshes = [];
-let roadSegments = [];      // pool of recycled world chunks
+let worldGroup;                       // holds everything that curves with the road
+let car, frontLeftPivot, frontRightPivot, playerWheels = [];
+let roadSegments = [];
+let traffic = [];
+let speedLines, speedLineData = [];
 
 // Car physics state
 const physics = {
-  currentSpeed: 0,   // forward speed along the car's heading
+  currentSpeed: 0,   // signed: negative = reversing
   heading:      0,   // radians; 0 = straight down the road
   steerInput:   0,   // -1 (left) .. +1 (right)
-  x:            0,   // lateral position on the road
-  wheelSpin:    0,   // accumulated wheel rotation
+  x:            0,   // lateral position, in road-local coordinates
+  lateralVel:   0,   // sideways velocity — gives the car weight
+  wheelSpin:    0,
 };
 
-// Keyboard state
-const keys = { accelerate: false, left: false, right: false };
+// Game state
+const game = {
+  state:      'driving',   // 'driving' | 'crashing' | 'over'
+  distance:   0,           // road distance travelled (drives the whole world)
+  score:      0,
+  best:       Number(localStorage.getItem('endlessDriveBest') || 0),
+  timeScale:  1,
+  crashTimer: 0,
+  shake:      0,
+  awaitingRestartRelease: false,
+};
+
+const keys = { accelerate: false, brake: false, left: false, right: false };
+let muted = false;
 
 // Reusable temporaries so the loop allocates nothing
 const _camTarget  = new THREE.Vector3();
 const _lookTarget = new THREE.Vector3();
+let camLateral = 0;
 
 // HUD elements
-const speedValueEl = document.getElementById('speed-value');
-const speedFillEl  = document.getElementById('speed-bar-fill');
-const hintEl       = document.getElementById('hint');
+const ui = {
+  speedNumber: document.getElementById('speed-number'),
+  speedFill:   document.getElementById('speed-bar-fill'),
+  gearNumber:  document.getElementById('gear-number'),
+  score:       document.getElementById('score-value'),
+  best:        document.getElementById('best-value'),
+  nearmiss:    document.getElementById('nearmiss'),
+  vignette:    document.getElementById('vignette'),
+  gameover:    document.getElementById('gameover'),
+  finalScore:  document.getElementById('final-score'),
+  finalBest:   document.getElementById('final-best'),
+  newBest:     document.getElementById('new-best'),
+  title:       document.getElementById('title'),
+  hint:        document.getElementById('hint'),
+  mutedTag:    document.getElementById('muted-tag'),
+};
+let lastKmh = -1, lastScore = -1, lastGear = -1;   // avoid needless DOM writes
 
 /* =========================================================================
-   SHARED MATERIALS / GEOMETRY
-   Built once and reused, so recycling the world stays cheap.
+   SHARED MATERIALS / GEOMETRY — built once, reused everywhere
    ========================================================================= */
 const MATERIALS = {
   road:      new THREE.MeshStandardMaterial({ color: 0x3b4048, roughness: 0.95 }),
@@ -225,11 +460,12 @@ const MATERIALS = {
   signPost:  new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.6, metalness: 0.3 }),
   signFace:  new THREE.MeshStandardMaterial({ color: 0xf0c419, roughness: 0.6 }),
   signFace2: new THREE.MeshStandardMaterial({ color: 0x3d7de0, roughness: 0.6 }),
+  streak:    new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 }),
 };
 
 const GEOMETRY = {
   dash:     new THREE.PlaneGeometry(0.22, 3),
-  edgeLine: new THREE.PlaneGeometry(0.18, CONFIG.segmentLength),
+  edgeLine: new THREE.PlaneGeometry(0.18, CONFIG.segmentLength * 1.02),
   trunk:    new THREE.CylinderGeometry(0.18, 0.26, 2.2, 6),
   cone:     new THREE.ConeGeometry(1.35, 3.2, 7),
   rock:     new THREE.DodecahedronGeometry(0.6, 0),
@@ -238,34 +474,75 @@ const GEOMETRY = {
   patch:    new THREE.CircleGeometry(3.2, 8),
 };
 
+// Traffic paint jobs
+const TRAFFIC_COLORS = [0x3d7de0, 0xf0c419, 0x2fae7a, 0xe2e5ea, 0x8a5cf0, 0xef7d3a, 0x53585f];
+
 /* =========================================================================
-   init() — renderer, scene, lights, world, car, event listeners
+   ROAD CURVE
+   =========================================================================
+   The centerline is a smooth function of distance travelled. Segments are
+   placed along it and the whole world is counter-rotated at the player, so
+   the road under the car always runs straight ahead while the road in the
+   distance sweeps left and right.
+   ========================================================================= */
+const CURVE = [
+  { amp: 55, freq: 0.0016,  phase: 0    },
+  { amp: 90, freq: 0.00047, phase: 1.7  },
+];
+
+function curveX(d) {
+  let x = 0;
+  for (const c of CURVE) x += Math.sin(d * c.freq + c.phase) * c.amp;
+  return x;
+}
+
+/** First derivative — the road's local heading. */
+function curveSlope(d) {
+  let s = 0;
+  for (const c of CURVE) s += Math.cos(d * c.freq + c.phase) * c.amp * c.freq;
+  return s;
+}
+
+/** Second derivative — how tight the corner is (drives centrifugal drift). */
+function curveBend(d) {
+  let b = 0;
+  for (const c of CURVE) b -= Math.sin(d * c.freq + c.phase) * c.amp * c.freq * c.freq;
+  return b;
+}
+
+/* =========================================================================
+   init()
    ========================================================================= */
 function init() {
-  // --- Renderer ---
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;   // soft shadows
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   document.body.appendChild(renderer.domElement);
 
-  // --- Scene: sky-coloured background + matching fog to hide the road's end ---
   scene = new THREE.Scene();
   scene.background = new THREE.Color(CONFIG.skyColor);
   scene.fog = new THREE.Fog(CONFIG.skyColor, CONFIG.fogNear, CONFIG.fogFar);
 
-  // --- Camera ---
   camera = new THREE.PerspectiveCamera(CONFIG.baseFov, window.innerWidth / window.innerHeight, 0.1, 800);
   camera.position.set(0, CONFIG.camHeight, CONFIG.camDistance);
 
   clock = new THREE.Clock();
 
+  worldGroup = new THREE.Group();
+  scene.add(worldGroup);
+
   createLights();
   createRoad();
   createCar();
+  createTraffic();
+  createSpeedLines();
+
+  updateWorld();          // place everything before the first frame
+  updateScoreHUD(true);
 
   window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onKeyDown);
@@ -276,15 +553,14 @@ function init() {
    Lighting: directional "sun" for shadows + hemisphere ambient for fill
    ------------------------------------------------------------------------- */
 function createLights() {
-  const ambient = new THREE.HemisphereLight(0xbfe3ff, 0x5c7a4a, 0.85);
-  scene.add(ambient);
+  scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x5c7a4a, 0.85));
 
   const sun = new THREE.DirectionalLight(0xfff3dd, 2.1);
   sun.position.set(-40, 55, 25);
   sun.castShadow = true;
 
-  // The world scrolls past a car that stays near the origin, so one fixed
-  // shadow camera around the origin always covers what's on screen.
+  // The car stays near the origin, so one fixed shadow camera covers the
+  // whole play area for the entire game.
   const s = 55;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left   = -s;
@@ -297,125 +573,128 @@ function createLights() {
   sun.shadow.normalBias = 0.02;
 
   scene.add(sun);
-  scene.add(sun.target);   // target defaults to (0, 0, 0)
+  scene.add(sun.target);
 }
 
 /* =========================================================================
    createRoad() — grass ground plus a pool of recycled road segments
    ========================================================================= */
 function createRoad() {
-  // Grass on both sides. It is featureless, so it doesn't need to scroll —
-  // the roadside props supply every motion cue.
-  const grass = new THREE.Mesh(new THREE.PlaneGeometry(900, 1600), MATERIALS.grass);
+  // Grass on both sides. It is featureless, so it never needs to move.
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1800), MATERIALS.grass);
   grass.rotation.x = -Math.PI / 2;
   grass.position.set(0, -0.02, -600);
   grass.receiveShadow = true;
   scene.add(grass);
 
-  // Segment pool: each chunk owns its asphalt, markings and scenery.
   for (let i = 0; i < CONFIG.segmentCount; i++) {
     const segment = createRoadSegment();
-    segment.position.z = -i * CONFIG.segmentLength;
-    populateSegment(segment);
-    scene.add(segment);
+    segment.userData.roadDist = i * CONFIG.segmentLength - CONFIG.behindCamera;
+    randomizeSegment(segment);
+    worldGroup.add(segment);
     roadSegments.push(segment);
   }
 }
 
 /**
- * Builds one road chunk: asphalt + shoulders + solid edge lines + dashed lane
- * dividers. The chunk is centred on its own origin, spanning ±length/2 in Z.
+ * Builds one road chunk plus a fixed pool of scenery objects. The props are
+ * created once here and only re-randomized on recycle — the game never
+ * allocates geometry while driving.
  */
 function createRoadSegment() {
   const len = CONFIG.segmentLength;
   const group = new THREE.Group();
 
-  // Asphalt (three lanes plus paved shoulders)
+  // Asphalt, very slightly overlong so curved joints never show a gap
   const asphalt = new THREE.Mesh(
-    new THREE.PlaneGeometry(ROAD_WIDTH + SHOULDER * 2, len),
+    new THREE.PlaneGeometry(ROAD_WIDTH + SHOULDER * 2, len * 1.04),
     MATERIALS.road
   );
   asphalt.rotation.x = -Math.PI / 2;
   asphalt.receiveShadow = true;
   group.add(asphalt);
 
-  // Slightly darker strips so the shoulders read as separate from the lanes
   for (const side of [-1, 1]) {
-    const shoulder = new THREE.Mesh(new THREE.PlaneGeometry(SHOULDER, len), MATERIALS.shoulder);
+    const shoulder = new THREE.Mesh(new THREE.PlaneGeometry(SHOULDER, len * 1.04), MATERIALS.shoulder);
     shoulder.rotation.x = -Math.PI / 2;
     shoulder.position.set(side * (ROAD_HALF + SHOULDER / 2), 0.005, 0);
     shoulder.receiveShadow = true;
     group.add(shoulder);
-  }
 
-  // Solid white edge lines
-  for (const side of [-1, 1]) {
     const edge = new THREE.Mesh(GEOMETRY.edgeLine, MATERIALS.lineWhite);
     edge.rotation.x = -Math.PI / 2;
     edge.position.set(side * (ROAD_HALF - 0.18), 0.012, 0);
     group.add(edge);
   }
 
-  // Dashed dividers between lanes
-  const dashPeriod = 8;                        // 3 units of dash, 5 of gap
-  const dashes = Math.round(len / dashPeriod);
+  // Dashed lane dividers
+  const dashPeriod = 8;
+  const dashes = Math.max(1, Math.round(len / dashPeriod));
   for (let lane = 1; lane < CONFIG.laneCount; lane++) {
     const x = -ROAD_HALF + lane * CONFIG.laneWidth;
     for (let d = 0; d < dashes; d++) {
       const dash = new THREE.Mesh(GEOMETRY.dash, MATERIALS.lineWhite);
       dash.rotation.x = -Math.PI / 2;
-      dash.position.set(x, 0.012, -len / 2 + dashPeriod * (d + 0.5));
+      dash.position.set(x, 0.012, -len / 2 + (len / dashes) * (d + 0.5));
       group.add(dash);
     }
   }
 
-  // Container for the randomised scenery, so it can be cleared on recycle
+  // --- Scenery pool (created once, reshuffled forever) ---
   const props = new THREE.Group();
   props.name = 'props';
   group.add(props);
 
+  const pool = { trees: [], rocks: [], patches: [], sign: null };
+  for (let i = 0; i < 4; i++) { const t = makeTree();  props.add(t); pool.trees.push(t); }
+  for (let i = 0; i < 2; i++) { const r = makeRock();  props.add(r); pool.rocks.push(r); }
+  for (let i = 0; i < 2; i++) { const p = makePatch(); props.add(p); pool.patches.push(p); }
+  pool.sign = makeSign(); props.add(pool.sign);
+
+  group.userData.pool = pool;
   return group;
 }
 
-/* -------------------------------------------------------------------------
-   Roadside scenery — regenerated whenever a segment is recycled, so the
-   world repeats endlessly without looking like a loop.
-   ------------------------------------------------------------------------- */
-function populateSegment(segment) {
-  const props = segment.getObjectByName('props');
-  props.clear();
-
+/** Re-rolls a segment's scenery. Pure transform updates — no allocation. */
+function randomizeSegment(segment) {
+  const pool = segment.userData.pool;
   const len  = CONFIG.segmentLength;
-  const edge = ROAD_HALF + SHOULDER;           // first free spot off the asphalt
+  const edge = ROAD_HALF + SHOULDER;
 
-  // Flat colour patches to break up the grass
-  for (let i = 0; i < 2; i++) {
-    const patch = new THREE.Mesh(GEOMETRY.patch, MATERIALS.grassDark);
-    patch.rotation.x = -Math.PI / 2;
+  for (const patch of pool.patches) {
     patch.position.set(randSide() * (edge + rand(2, 40)), 0.0, rand(-len / 2, len / 2));
     patch.scale.setScalar(rand(0.6, 1.6));
-    props.add(patch);
   }
 
-  // Trees — the main sense of speed
-  const treeCount = Math.round(rand(4, 8));
-  for (let i = 0; i < treeCount; i++) {
-    props.add(makeTree(randSide() * (edge + rand(3, 45)), rand(-len / 2, len / 2)));
-  }
+  const treeCount = Math.round(rand(1.6, 4.4));   // some segments stay sparse
+  pool.trees.forEach((tree, i) => {
+    tree.visible = i < treeCount;
+    if (!tree.visible) return;
+    tree.position.set(randSide() * (edge + rand(3, 48)), 0, rand(-len / 2, len / 2));
+    tree.rotation.y = rand(0, Math.PI * 2);
+    tree.scale.setScalar(rand(0.75, 1.45));
+  });
 
-  // Rocks scattered near the shoulder
-  const rockCount = Math.round(rand(1, 4));
-  for (let i = 0; i < rockCount; i++) {
-    props.add(makeRock(randSide() * (edge + rand(1.2, 12)), rand(-len / 2, len / 2)));
-  }
+  const rockCount = Math.round(rand(0, 2));
+  pool.rocks.forEach((rock, i) => {
+    rock.visible = i < rockCount;
+    if (!rock.visible) return;
+    rock.position.set(randSide() * (edge + rand(1.2, 12)), rand(0.15, 0.35), rand(-len / 2, len / 2));
+    rock.rotation.set(rand(0, 3), rand(0, 3), rand(0, 3));
+    rock.scale.set(rand(0.6, 1.5), rand(0.5, 1.0), rand(0.6, 1.5));
+  });
 
-  // Occasional road sign, angled toward the driver
-  if (Math.random() < 0.55) {
-    props.add(makeSign(randSide() * (edge + rand(1.0, 2.4)), rand(-len / 2, len / 2)));
+  const sign = pool.sign;
+  sign.visible = Math.random() < 0.35;
+  if (sign.visible) {
+    const x = randSide() * (edge + rand(1.0, 2.4));
+    sign.position.set(x, 0, rand(-len / 2, len / 2));
+    sign.rotation.y = (x > 0 ? -1 : 1) * 0.28;
+    sign.children[1].material = Math.random() < 0.5 ? MATERIALS.signFace : MATERIALS.signFace2;
   }
 }
 
-function makeTree(x, z) {
+function makeTree() {
   const tree = new THREE.Group();
 
   const trunk = new THREE.Mesh(GEOMETRY.trunk, MATERIALS.trunk);
@@ -437,22 +716,22 @@ function makeTree(x, z) {
   upper.castShadow = true;
   tree.add(upper);
 
-  tree.position.set(x, 0, z);
-  tree.rotation.y = rand(0, Math.PI * 2);
-  tree.scale.setScalar(rand(0.75, 1.45));
   return tree;
 }
 
-function makeRock(x, z) {
+function makeRock() {
   const rock = new THREE.Mesh(GEOMETRY.rock, MATERIALS.rock);
-  rock.position.set(x, rand(0.15, 0.35), z);
-  rock.rotation.set(rand(0, 3), rand(0, 3), rand(0, 3));
-  rock.scale.set(rand(0.6, 1.5), rand(0.5, 1.0), rand(0.6, 1.5));
   rock.castShadow = true;
   return rock;
 }
 
-function makeSign(x, z) {
+function makePatch() {
+  const patch = new THREE.Mesh(GEOMETRY.patch, MATERIALS.grassDark);
+  patch.rotation.x = -Math.PI / 2;
+  return patch;
+}
+
+function makeSign() {
   const sign = new THREE.Group();
 
   const post = new THREE.Mesh(GEOMETRY.post, MATERIALS.signPost);
@@ -460,205 +739,409 @@ function makeSign(x, z) {
   post.castShadow = true;
   sign.add(post);
 
-  const panel = new THREE.Mesh(
-    GEOMETRY.panel,
-    Math.random() < 0.5 ? MATERIALS.signFace : MATERIALS.signFace2
-  );
+  const panel = new THREE.Mesh(GEOMETRY.panel, MATERIALS.signFace);
   panel.position.y = 2.1;
   panel.castShadow = true;
-  sign.add(panel);
+  sign.add(panel);       // index 1 — swapped in randomizeSegment()
 
-  sign.position.set(x, 0, z);
-  sign.rotation.y = (x > 0 ? -1 : 1) * 0.28;   // face the oncoming car
   return sign;
 }
 
 /* =========================================================================
-   createCar() — assembled entirely from Three.js primitives
+   CARS — one builder used for the player and for traffic
    ========================================================================= */
-function createCar() {
-  car = new THREE.Group();
-  wheelMeshes = [];
+/**
+ * Assembles a car from primitives. Traffic uses `simple` to skip the glass
+ * and rims, which keeps the draw call count reasonable.
+ */
+function buildCar(bodyColor, simple = false) {
+  const group = new THREE.Group();
+  const wheels = [];
 
-  const bodyMat  = new THREE.MeshStandardMaterial({ color: 0xd8383c, roughness: 0.35, metalness: 0.35 });
-  const cabinMat = new THREE.MeshStandardMaterial({ color: 0xb32b30, roughness: 0.35, metalness: 0.35 });
-  const glassMat = new THREE.MeshStandardMaterial({ color: 0x1e2a38, roughness: 0.1,  metalness: 0.6 });
+  const dark = new THREE.Color(bodyColor).multiplyScalar(0.78).getHex();
+  const bodyMat  = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.35, metalness: 0.35 });
+  const cabinMat = new THREE.MeshStandardMaterial({ color: dark, roughness: 0.35, metalness: 0.35 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x1e2a38, roughness: 0.1, metalness: 0.6 });
   const tireMat  = new THREE.MeshStandardMaterial({ color: 0x1b1c1f, roughness: 0.9 });
   const rimMat   = new THREE.MeshStandardMaterial({ color: 0xd6d9de, roughness: 0.3, metalness: 0.8 });
   const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff2c4, emissive: 0xffe9a8, emissiveIntensity: 0.8 });
   const brakeMat = new THREE.MeshStandardMaterial({ color: 0xff4433, emissive: 0x992018, emissiveIntensity: 0.6 });
 
-  // --- Lower body ---
+  // Lower body
   const body = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.55, 4.4), bodyMat);
   body.position.y = 0.62;
   body.castShadow = true;
-  car.add(body);
+  group.add(body);
 
-  // --- Hood/trunk deck, a touch narrower for a chamfered look ---
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.22, 4.0), bodyMat);
-  deck.position.y = 0.96;
-  deck.castShadow = true;
-  car.add(deck);
-
-  // --- Cabin ---
+  // Cabin
   const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.6, 1.9), cabinMat);
   cabin.position.set(0, 1.32, 0.25);
   cabin.castShadow = true;
-  car.add(cabin);
+  group.add(cabin);
 
-  // --- Glass: windscreen, rear window, side windows ---
-  const windscreen = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.5, 0.1), glassMat);
-  windscreen.position.set(0, 1.34, -0.68);
-  windscreen.rotation.x = -0.32;
-  car.add(windscreen);
+  if (!simple) {
+    // Hood/trunk deck, a touch narrower for a chamfered look
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.22, 4.0), bodyMat);
+    deck.position.y = 0.96;
+    deck.castShadow = true;
+    group.add(deck);
 
-  const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.46, 0.1), glassMat);
-  rearGlass.position.set(0, 1.34, 1.18);
-  rearGlass.rotation.x = 0.34;
-  car.add(rearGlass);
+    const windscreen = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.5, 0.1), glassMat);
+    windscreen.position.set(0, 1.34, -0.68);
+    windscreen.rotation.x = -0.32;
+    group.add(windscreen);
 
-  for (const side of [-1, 1]) {
-    const sideGlass = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 1.6), glassMat);
-    sideGlass.position.set(side * 0.86, 1.34, 0.25);
-    car.add(sideGlass);
+    const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.46, 0.1), glassMat);
+    rearGlass.position.set(0, 1.34, 1.18);
+    rearGlass.rotation.x = 0.34;
+    group.add(rearGlass);
+
+    for (const side of [-1, 1]) {
+      const sideGlass = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 1.6), glassMat);
+      sideGlass.position.set(side * 0.86, 1.34, 0.25);
+      group.add(sideGlass);
+
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.1), lightMat);
+      head.position.set(side * 0.62, 0.74, -2.2);
+      group.add(head);
+    }
   }
 
-  // --- Headlights and tail lights (the car faces -Z) ---
+  // Tail lights (kept on traffic too — they read well from behind)
   for (const side of [-1, 1]) {
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.1), lightMat);
-    head.position.set(side * 0.62, 0.74, -2.2);
-    car.add(head);
-
     const tail = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.1), brakeMat);
     tail.position.set(side * 0.68, 0.78, 2.2);
-    car.add(tail);
+    group.add(tail);
   }
 
-  // --- Wheels ---
-  // The geometry is pre-rotated so the cylinder axis runs along X. Each wheel
-  // then lives in a pivot group: the pivot yaws for steering, the mesh inside
-  // spins for rolling — so the two rotations never fight each other.
-  const tireGeo = new THREE.CylinderGeometry(CONFIG.wheelRadius, CONFIG.wheelRadius, 0.34, 18);
+  // Wheels. Geometry is pre-rotated so the cylinder axis runs along X; each
+  // wheel then sits in a pivot group, so steering (pivot yaw) and rolling
+  // (mesh spin) never fight each other.
+  const tireGeo = new THREE.CylinderGeometry(CONFIG.wheelRadius, CONFIG.wheelRadius, 0.34, simple ? 10 : 18);
   tireGeo.rotateZ(Math.PI / 2);
   const rimGeo = new THREE.CylinderGeometry(CONFIG.wheelRadius * 0.55, CONFIG.wheelRadius * 0.55, 0.36, 10);
   rimGeo.rotateZ(Math.PI / 2);
 
-  const wheelSpecs = [
+  const specs = [
     { x: -1.02, z: -1.45, front: true  },
     { x:  1.02, z: -1.45, front: true  },
     { x: -1.02, z:  1.50, front: false },
     { x:  1.02, z:  1.50, front: false },
   ];
 
-  for (const spec of wheelSpecs) {
+  let frontLeft = null, frontRight = null;
+  for (const spec of specs) {
     const pivot = new THREE.Group();
     pivot.position.set(spec.x, CONFIG.wheelRadius, spec.z);
 
     const tire = new THREE.Mesh(tireGeo, tireMat);
     tire.castShadow = true;
-    tire.add(new THREE.Mesh(rimGeo, rimMat));
+    if (!simple) tire.add(new THREE.Mesh(rimGeo, rimMat));
 
     pivot.add(tire);
-    car.add(pivot);
-    wheelMeshes.push(tire);
+    group.add(pivot);
+    wheels.push(tire);
 
     if (spec.front) {
-      if (spec.x < 0) frontLeftPivot = pivot;
-      else            frontRightPivot = pivot;
+      if (spec.x < 0) frontLeft = pivot; else frontRight = pivot;
     }
   }
 
-  scene.add(car);
+  return { group, wheels, frontLeft, frontRight };
+}
+
+/** createCar() — the player's car, parked at the world origin forever. */
+function createCar() {
+  const built = buildCar(0xd8383c, false);
+  car = built.group;
+  playerWheels = built.wheels;
+  frontLeftPivot = built.frontLeft;
+  frontRightPivot = built.frontRight;
+  scene.add(car);        // deliberately NOT in worldGroup — the world moves, not the car
+}
+
+/* =========================================================================
+   TRAFFIC — slower cars to weave through; the game's only fail state
+   ========================================================================= */
+function createTraffic() {
+  for (let i = 0; i < CONFIG.trafficCount; i++) {
+    const color = TRAFFIC_COLORS[i % TRAFFIC_COLORS.length];
+    const built = buildCar(color, true);
+    worldGroup.add(built.group);
+
+    const entry = {
+      group: built.group,
+      wheels: built.wheels,
+      roadDist: 0,
+      lane: 0,
+      laneX: 0,
+      speed: 0,
+      scored: false,
+    };
+    traffic.push(entry);
+    respawnTraffic(entry, true);
+  }
+}
+
+/** Places a traffic car somewhere ahead, never sealing off every lane. */
+function respawnTraffic(entry, initial = false) {
+  const minAhead = initial ? 90 : CONFIG.spawnMin;
+
+  for (let attempt = 0; attempt < 14; attempt++) {
+    const d = game.distance + rand(minAhead, CONFIG.spawnMax);
+    const lane = Math.floor(Math.random() * CONFIG.laneCount);
+    if (isSpotFree(entry, d, lane)) {
+      entry.roadDist = d;
+      entry.lane = lane;
+      entry.laneX = LANE_X[lane] + rand(-0.5, 0.5);
+      entry.speed = rand(CONFIG.trafficMinSpeed, CONFIG.trafficMaxSpeed);
+      entry.scored = false;
+      return;
+    }
+  }
+
+  // Fallback: park it far away and try again next frame
+  entry.roadDist = game.distance + CONFIG.spawnMax;
+  entry.lane = 1;
+  entry.laneX = LANE_X[1];
+  entry.speed = CONFIG.trafficMaxSpeed;
+  entry.scored = false;
+}
+
+/**
+ * A spot is free if no car already sits there, and taking it still leaves at
+ * least one lane open across that stretch of road — so there is always a way
+ * through.
+ */
+function isSpotFree(self, d, lane) {
+  const blocked = new Set([lane]);
+
+  for (const other of traffic) {
+    if (other === self) continue;
+    if (Math.abs(other.roadDist - d) < 45) {
+      if (other.lane === lane) return false;
+      blocked.add(other.lane);
+    }
+  }
+  return blocked.size < CONFIG.laneCount;
+}
+
+function updateTraffic(dt) {
+  for (const t of traffic) {
+    t.roadDist += t.speed * dt;
+
+    const rel = t.roadDist - game.distance;
+
+    // Recycle once passed (or left far behind if the player reversed)
+    if (rel < -70 || rel > CONFIG.spawnMax + 260) {
+      respawnTraffic(t);
+      continue;
+    }
+
+    // Spin the wheels at their own speed
+    for (const wheel of t.wheels) wheel.rotation.x -= (t.speed * dt) / CONFIG.wheelRadius;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Collisions and near misses, both in flat road-local coordinates.
+   ------------------------------------------------------------------------- */
+function checkCollisions() {
+  if (game.state !== 'driving') return;
+
+  for (const t of traffic) {
+    const dz = t.roadDist - game.distance;
+    if (Math.abs(dz) > 12) continue;
+
+    const dx = t.laneX - physics.x;
+
+    // Overlap on both axes = crash
+    if (Math.abs(dx) < CAR_HALF_W * 2 && Math.abs(dz) < CAR_HALF_L * 2) {
+      crash();
+      return;
+    }
+
+    // Squeezed past close alongside = near miss bonus, once per car
+    if (!t.scored && Math.abs(dz) < 2.5 &&
+        Math.abs(dx) >= CAR_HALF_W * 2 && Math.abs(dx) < CONFIG.nearMissDist) {
+      t.scored = true;
+      game.score += CONFIG.nearMissBonus;
+      flashNearMiss();
+    }
+  }
+}
+
+/* =========================================================================
+   SPEED LINES — cheap streaks that only appear when really moving
+   ========================================================================= */
+function createSpeedLines() {
+  const count = 70;
+  const positions = new Float32Array(count * 6);   // two endpoints per streak
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  for (let i = 0; i < count; i++) {
+    speedLineData.push({
+      x: randSide() * rand(3.5, 34),
+      y: rand(0.4, 9),
+      z: rand(-140, 20),
+    });
+  }
+
+  speedLines = new THREE.LineSegments(geo, MATERIALS.streak);
+  speedLines.frustumCulled = false;
+  scene.add(speedLines);
+}
+
+function updateSpeedLines(dt, travelled) {
+  const speedRatio = Math.abs(physics.currentSpeed) / CONFIG.maxSpeed;
+  const opacity = smoothstep(0.5, 1.0, speedRatio) * 0.45;
+  MATERIALS.streak.opacity = opacity;
+  if (opacity <= 0.001) return;      // nothing to see — skip the buffer update
+
+  const length = 3 + speedRatio * 22;
+  const pos = speedLines.geometry.attributes.position.array;
+
+  speedLineData.forEach((line, i) => {
+    line.z += travelled * 1.5;
+    if (line.z > 25) {
+      line.z -= 165;
+      line.x = randSide() * rand(3.5, 34);
+      line.y = rand(0.4, 9);
+    }
+
+    const o = i * 6;
+    pos[o]     = line.x; pos[o + 1] = line.y; pos[o + 2] = line.z;
+    pos[o + 3] = line.x; pos[o + 4] = line.y; pos[o + 5] = line.z - length;
+  });
+
+  speedLines.geometry.attributes.position.needsUpdate = true;
 }
 
 /* =========================================================================
    updatePhysics() — arcade driving model, fully delta-time driven
    =========================================================================
-   The car never actually moves along Z. The world scrolls toward it instead,
-   which keeps every coordinate near the origin (stable shadows, no floating
-   point drift) while producing a genuinely endless road.
+   The car never moves along Z. `game.distance` advances instead, and the
+   world is rebuilt around it every frame, which keeps every coordinate near
+   the origin (stable shadows, no float drift) on a genuinely endless road.
    ========================================================================= */
 function updatePhysics(dt) {
   const p = physics;
 
-  // --- Longitudinal: throttle vs. friction ---
-  if (keys.accelerate) {
+  // --- Longitudinal: throttle / brake / friction ---
+  if (game.state === 'driving' && keys.accelerate) {
     p.currentSpeed += CONFIG.acceleration * dt;
+  } else if (game.state === 'driving' && keys.brake) {
+    // Brake hard down to a stop, then crawl backwards
+    p.currentSpeed -= (p.currentSpeed > 0 ? CONFIG.brakeForce : CONFIG.reverseAccel) * dt;
   } else {
-    // Constant rolling friction plus speed-proportional air drag, so the car
-    // sheds speed quickly at first and then coasts down smoothly.
-    p.currentSpeed -= (CONFIG.friction + p.currentSpeed * CONFIG.airDrag) * dt;
+    // Rolling friction plus speed-proportional air drag, pulling toward zero
+    // from whichever side the car is on.
+    const drag = (CONFIG.friction + Math.abs(p.currentSpeed) * CONFIG.airDrag) * dt;
+    p.currentSpeed = p.currentSpeed > 0
+      ? Math.max(0, p.currentSpeed - drag)
+      : Math.min(0, p.currentSpeed + drag);
   }
-  p.currentSpeed = clamp(p.currentSpeed, 0, CONFIG.maxSpeed);
+  p.currentSpeed = clamp(p.currentSpeed, -CONFIG.maxReverseSpeed, CONFIG.maxSpeed);
 
-  // --- Steering input ---
-  p.steerInput = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+  // --- Steering ---
+  p.steerInput = game.state === 'driving' ? (keys.right ? 1 : 0) - (keys.left ? 1 : 0) : 0;
 
-  // Steering authority scales with speed: a stopped car cannot turn at all,
-  // and the response tapers off again near top speed so it stays stable.
-  const speedRatio       = p.currentSpeed / CONFIG.maxSpeed;
-  const grip             = smoothstep(0, CONFIG.steerMinSpeed * 4, speedRatio);
-  const highSpeedFalloff = 1 - 0.45 * speedRatio;
-  const authority        = grip * highSpeedFalloff;
+  // Authority scales with speed: a stopped car cannot turn at all.
+  const speedRatio = Math.abs(p.currentSpeed) / CONFIG.maxSpeed;
+  const grip       = smoothstep(0, CONFIG.steerMinSpeed * 4, speedRatio);
+  const authority  = grip * (1 - CONFIG.steerHighSpeedFalloff * speedRatio);
 
   if (p.steerInput !== 0) {
     p.heading += p.steerInput * CONFIG.steerRate * authority * dt;
   } else {
-    // Self-centering: heading eases back toward straight ahead
     p.heading -= p.heading * Math.min(1, CONFIG.steerReturn * dt);
   }
   p.heading = clamp(p.heading, -CONFIG.maxHeading, CONFIG.maxHeading);
 
-  // --- Resolve heading into sideways drift and forward travel ---
-  const lateral = Math.sin(p.heading) * p.currentSpeed * dt;
+  // --- Lateral inertia ---
+  // Heading sets a *target* sideways velocity that the car eases into, so
+  // lane changes have weight instead of snapping.
+  const targetLateral = Math.sin(p.heading) * p.currentSpeed;
+  p.lateralVel = THREE.MathUtils.lerp(p.lateralVel, targetLateral, 1 - Math.exp(-CONFIG.gripLag * dt));
+
+  // Corners throw the car toward the outside of the bend
+  const drift = -curveBend(game.distance) * p.currentSpeed * p.currentSpeed * CONFIG.curveDrift;
+  p.x += (p.lateralVel + drift) * dt;
+
   const forward = Math.cos(p.heading) * p.currentSpeed * dt;
 
-  p.x += lateral;
-
-  // --- Clamp the car to the road (lanes plus a little of the shoulder) ---
-  const limit = ROAD_HALF + SHOULDER * 0.5 - 1.0;   // 1.0 ≈ half the car's width
+  // --- Clamp to the road (lanes plus a little of the shoulder) ---
+  const limit = ROAD_HALF + SHOULDER * 0.5 - CAR_HALF_W;
   if (p.x > limit || p.x < -limit) {
     p.x = clamp(p.x, -limit, limit);
-    p.heading *= 0.85;   // straighten out instead of grinding along the edge
+    p.heading *= 0.85;      // straighten out rather than grind along the edge
+    p.lateralVel = 0;
+  }
+
+  // --- Advance down the road and score it ---
+  game.distance += forward;
+  if (game.state === 'driving' && forward > 0) {
+    game.score += forward * CONFIG.pointsPerUnit * (1 + speedRatio);
   }
 
   // --- Apply to the visible car ---
   car.position.x = p.x;
-  car.rotation.y = -p.heading;      // steering right (+heading) = negative yaw
-
-  // Subtle body roll into the turn
+  car.rotation.y = -p.heading;
   car.rotation.z = THREE.MathUtils.lerp(car.rotation.z, p.heading * 0.22, 1 - Math.exp(-8 * dt));
 
-  // --- Front wheels turn slightly with the steering input ---
+  // Front wheels turn slightly with the steering input
   const targetSteerAngle = -p.steerInput * 0.45;
   const wheelBlend = 1 - Math.exp(-12 * dt);
   frontLeftPivot.rotation.y  = THREE.MathUtils.lerp(frontLeftPivot.rotation.y,  targetSteerAngle, wheelBlend);
   frontRightPivot.rotation.y = THREE.MathUtils.lerp(frontRightPivot.rotation.y, targetSteerAngle, wheelBlend);
 
-  // --- Roll every wheel at the rate the current speed implies ---
   p.wheelSpin += forward / CONFIG.wheelRadius;
-  for (const wheel of wheelMeshes) wheel.rotation.x = p.wheelSpin;
+  for (const wheel of playerWheels) wheel.rotation.x = p.wheelSpin;
 
-  // --- Scroll the world underneath the car ---
-  scrollWorld(forward);
-
-  updateHUD();
+  updateSpeedLines(dt, forward);
+  updateSpeedHUD();
 }
 
-/**
- * Moves every road segment toward the camera and wraps any chunk that has
- * passed behind it back to the far end — this is the infinite highway.
- */
-function scrollWorld(distance) {
-  const recycleAt = CONFIG.segmentLength * 1.5;   // safely behind the camera
+/* =========================================================================
+   updateWorld() — lay the road out along the curve around the player
+   ========================================================================= */
+function updateWorld() {
+  const p = game.distance;
+  const originX = curveX(p);
+
+  // Counter-rotate the world so the road under the car always runs straight
+  worldGroup.rotation.y = Math.atan(curveSlope(p));
 
   for (const segment of roadSegments) {
-    segment.position.z += distance;
+    let rel = segment.userData.roadDist - p;
 
-    if (segment.position.z > recycleAt) {
-      segment.position.z -= TOTAL_ROAD_LEN;
-      populateSegment(segment);                   // fresh scenery on every lap
+    // Recycle in both directions (the player can reverse)
+    if (rel < -CONFIG.behindCamera) {
+      segment.userData.roadDist += TOTAL_ROAD_LEN;
+      randomizeSegment(segment);
+      rel += TOTAL_ROAD_LEN;
+    } else if (rel > TOTAL_ROAD_LEN - CONFIG.behindCamera) {
+      segment.userData.roadDist -= TOTAL_ROAD_LEN;
+      randomizeSegment(segment);
+      rel -= TOTAL_ROAD_LEN;
     }
+
+    const d = segment.userData.roadDist;
+    segment.position.set(curveX(d) - originX, 0, -rel);
+    segment.rotation.y = -Math.atan(curveSlope(d));
+
+    // Only nearby scenery casts shadows — keeps the shadow pass cheap
+    segment.getObjectByName('props').traverse(o => { if (o.isMesh) o.castShadow = rel < 90; });
+  }
+
+  for (const t of traffic) {
+    const rel = t.roadDist - p;
+    const d = t.roadDist;
+    const slope = Math.atan(curveSlope(d));
+    // Offset the lane position perpendicular to the road heading
+    t.group.position.set(curveX(d) - originX + t.laneX * Math.cos(slope), 0, -rel);
+    t.group.rotation.y = -slope;
   }
 }
 
@@ -666,37 +1149,243 @@ function scrollWorld(distance) {
    updateCamera() — chase camera, behind and above, smoothly interpolated
    ========================================================================= */
 function updateCamera(dt) {
-  const speedRatio = physics.currentSpeed / CONFIG.maxSpeed;
+  const speedRatio = Math.abs(physics.currentSpeed) / CONFIG.maxSpeed;
 
-  // Target: behind and above the car, drifting sideways with it and pulling
-  // back a little as speed rises.
+  // The camera's lateral follow lags harder the faster you go, so hard
+  // steering swings the view instead of gluing it to the car.
+  const lateralBlend = 1 - Math.exp(-CONFIG.camLateralLag * (1 - speedRatio * 0.45) * dt);
+  camLateral = THREE.MathUtils.lerp(camLateral, physics.x, lateralBlend);
+
   _camTarget.set(
-    physics.x * 0.55,
-    CONFIG.camHeight   + speedRatio * 0.35,
-    CONFIG.camDistance + speedRatio * 1.6
+    camLateral * 0.75,
+    CONFIG.camHeight + speedRatio * 0.35,
+    CONFIG.camDistance + speedRatio * 1.8
   );
 
   // Exponential smoothing — frame-rate independent, unlike a raw lerp factor
   const blend = 1 - Math.exp(-CONFIG.camLerp * dt);
   camera.position.lerp(_camTarget, blend);
 
-  // Aim down the road, slightly ahead of the car
+  // Screen shake on impact
+  if (game.shake > 0.001) {
+    camera.position.x += rand(-1, 1) * game.shake;
+    camera.position.y += rand(-1, 1) * game.shake * 0.7;
+    game.shake *= Math.exp(-3.5 * dt);
+  }
+
   _lookTarget.set(physics.x * 0.4, 1.1, CONFIG.camLookAhead);
   camera.lookAt(_lookTarget);
 
-  // A touch of FOV stretch sells the speed
   const targetFov = CONFIG.baseFov + speedRatio * 10;
   camera.fov += (targetFov - camera.fov) * blend;
   camera.updateProjectionMatrix();
 }
 
 /* =========================================================================
-   HUD — current speed, top-left
+   AUDIO — a two-oscillator engine, built with WebAudio only
+   =========================================================================
+   Must be created from a user gesture, so it starts on the first keypress.
    ========================================================================= */
-function updateHUD() {
-  const kmh = Math.round(physics.currentSpeed * 3.6);
-  speedValueEl.innerHTML = kmh + '<span>km/h</span>';
-  speedFillEl.style.width = (physics.currentSpeed / CONFIG.maxSpeed * 100).toFixed(1) + '%';
+let audio = null;
+
+function initAudio() {
+  if (audio) return;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+
+  const ctx = new Ctx();
+
+  const master = ctx.createGain();
+  master.gain.value = 0;
+  master.connect(ctx.destination);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 600;
+  filter.Q.value = 5;
+  filter.connect(master);
+
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.value = 55;
+  osc.connect(filter);
+  osc.start();
+
+  // A sub-octave square adds the low rumble
+  const sub = ctx.createOscillator();
+  sub.type = 'square';
+  sub.frequency.value = 27;
+  const subGain = ctx.createGain();
+  subGain.gain.value = 0.35;
+  sub.connect(subGain);
+  subGain.connect(filter);
+  sub.start();
+
+  audio = { ctx, master, filter, osc, sub };
+}
+
+/** Maps speed to pitch with five fake gears, so the engine climbs and shifts. */
+function currentGear() {
+  const ratio = clamp(Math.abs(physics.currentSpeed) / CONFIG.maxSpeed, 0, 0.9999);
+  return Math.floor(ratio * 5);
+}
+
+function updateAudio() {
+  if (!audio) return;
+
+  const t = audio.ctx.currentTime;
+  const ratio = clamp(Math.abs(physics.currentSpeed) / CONFIG.maxSpeed, 0, 1);
+  const inGear = (ratio * 5) % 1;             // 0..1 within the current gear
+
+  const freq = 46 + inGear * 62 + ratio * 26;
+  audio.osc.frequency.setTargetAtTime(freq, t, 0.04);
+  audio.sub.frequency.setTargetAtTime(freq * 0.5, t, 0.04);
+  audio.filter.frequency.setTargetAtTime(
+    380 + ratio * 2400 + (keys.accelerate ? 700 : 0), t, 0.08
+  );
+
+  const load = keys.accelerate ? 1.25 : 0.8;
+  const target = (muted || game.state === 'over') ? 0 : (0.03 + ratio * 0.07) * load;
+  audio.master.gain.setTargetAtTime(target, t, 0.1);
+}
+
+function playCrashSound() {
+  if (!audio || muted) return;
+  const ctx = audio.ctx;
+
+  // A short burst of decaying white noise
+  const len = Math.floor(ctx.sampleRate * 0.7);
+  const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    const fade = 1 - i / len;
+    data[i] = (Math.random() * 2 - 1) * fade * fade;
+  }
+
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 1400;
+
+  const gain = ctx.createGain();
+  gain.gain.value = 0.5;
+
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  src.start();
+}
+
+/* =========================================================================
+   GAME STATE — crash, restart, scoring
+   ========================================================================= */
+function crash() {
+  if (game.state !== 'driving') return;
+
+  game.state = 'crashing';
+  game.crashTimer = 0;
+  game.shake = 0.55;
+  physics.heading = 0;
+  physics.lateralVel = 0;
+
+  ui.vignette.classList.add('show');
+  playCrashSound();
+}
+
+function restart() {
+  physics.currentSpeed = 0;
+  physics.heading = 0;
+  physics.steerInput = 0;
+  physics.x = 0;
+  physics.lateralVel = 0;
+
+  game.distance = 0;
+  game.score = 0;
+  game.timeScale = 1;
+  game.shake = 0;
+  game.state = 'driving';
+
+  camLateral = 0;
+  car.rotation.set(0, 0, 0);
+
+  for (const segment of roadSegments) randomizeSegment(segment);
+  for (const t of traffic) respawnTraffic(t, true);
+
+  ui.gameover.classList.remove('show');
+  ui.vignette.classList.remove('show');
+  ui.newBest.style.display = 'none';
+
+  updateWorld();
+}
+
+function updateCrashSequence(dt) {
+  game.crashTimer += dt;
+
+  // Ease into slow motion, then hand over to the game-over screen
+  game.timeScale = THREE.MathUtils.lerp(game.timeScale, 0.16, 1 - Math.exp(-6 * dt));
+  physics.currentSpeed *= Math.exp(-2.5 * dt);
+
+  if (game.crashTimer > 1.3) {
+    game.state = 'over';
+
+    const score = Math.floor(game.score);
+    const isBest = score > game.best;
+    if (isBest) {
+      game.best = score;
+      localStorage.setItem('endlessDriveBest', String(score));
+    }
+
+    ui.finalScore.textContent = 'Score ' + score.toLocaleString();
+    ui.finalBest.textContent  = 'Best ' + game.best.toLocaleString();
+    ui.newBest.style.display  = isBest ? 'block' : 'none';
+    ui.gameover.classList.add('show');
+    ui.vignette.classList.remove('show');
+
+    // Don't let the SPACE that was held during the crash restart instantly
+    game.awaitingRestartRelease = keys.accelerate;
+    updateScoreHUD(true);
+  }
+}
+
+/* =========================================================================
+   HUD
+   ========================================================================= */
+function updateSpeedHUD() {
+  // textContent on a dedicated node, and only when the value actually
+  // changes — no innerHTML parsing every frame.
+  const kmh = Math.round(Math.abs(physics.currentSpeed) * 3.6);
+  if (kmh !== lastKmh) {
+    lastKmh = kmh;
+    ui.speedNumber.textContent = kmh;
+    ui.speedFill.style.width =
+      (Math.abs(physics.currentSpeed) / CONFIG.maxSpeed * 100).toFixed(1) + '%';
+  }
+
+  const gear = physics.currentSpeed < -0.1 ? -1 : currentGear() + 1;
+  if (gear !== lastGear) {
+    lastGear = gear;
+    ui.gearNumber.textContent = gear === -1 ? 'R' : gear;
+  }
+
+  updateScoreHUD(false);
+}
+
+function updateScoreHUD(force) {
+  const score = Math.floor(game.score);
+  if (score !== lastScore || force) {
+    lastScore = score;
+    ui.score.textContent = score.toLocaleString();
+    ui.best.textContent = 'Best ' + game.best.toLocaleString();
+  }
+}
+
+function flashNearMiss() {
+  ui.nearmiss.textContent = 'NEAR MISS +' + CONFIG.nearMissBonus;
+  ui.nearmiss.classList.remove('show');
+  void ui.nearmiss.offsetWidth;      // restart the CSS animation
+  ui.nearmiss.classList.add('show');
 }
 
 /* =========================================================================
@@ -706,10 +1395,22 @@ function animate() {
   requestAnimationFrame(animate);
 
   // Clamp dt so an alt-tab pause can't teleport the car down the road
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const rawDt = Math.min(clock.getDelta(), 0.05);
 
-  updatePhysics(dt);
-  updateCamera(dt);
+  if (game.state === 'crashing') updateCrashSequence(rawDt);
+  else if (game.state === 'driving') game.timeScale = 1;
+
+  const dt = rawDt * game.timeScale;
+
+  if (game.state !== 'over') {
+    updatePhysics(dt);
+    updateTraffic(dt);
+    updateWorld();
+    checkCollisions();
+  }
+
+  updateCamera(rawDt);
+  updateAudio();
 
   renderer.render(scene, camera);
 }
@@ -718,28 +1419,55 @@ function animate() {
    INPUT & EVENTS
    ========================================================================= */
 function onKeyDown(event) {
+  // WebAudio may only start from a user gesture
+  initAudio();
+  if (audio && audio.ctx.state === 'suspended') audio.ctx.resume();
+
   switch (event.code) {
     case 'Space':
+      event.preventDefault();
+      if (game.state === 'over' && !game.awaitingRestartRelease) { restart(); break; }
       keys.accelerate = true;
-      event.preventDefault();      // don't let SPACE scroll the page
       hideHint();
       break;
+
+    case 'KeyS':
+    case 'ArrowDown':
+      keys.brake = true;
+      hideHint();
+      break;
+
     case 'KeyA':
     case 'ArrowLeft':
       keys.left = true;
       hideHint();
       break;
+
     case 'KeyD':
     case 'ArrowRight':
       keys.right = true;
       hideHint();
+      break;
+
+    case 'KeyR':
+      if (game.state === 'over') restart();
+      break;
+
+    case 'KeyM':
+      muted = !muted;
+      ui.mutedTag.style.display = muted ? 'block' : 'none';
       break;
   }
 }
 
 function onKeyUp(event) {
   switch (event.code) {
-    case 'Space':      keys.accelerate = false; break;
+    case 'Space':
+      keys.accelerate = false;
+      game.awaitingRestartRelease = false;
+      break;
+    case 'KeyS':
+    case 'ArrowDown':  keys.brake = false; break;
     case 'KeyA':
     case 'ArrowLeft':  keys.left  = false; break;
     case 'KeyD':
@@ -748,10 +1476,13 @@ function onKeyUp(event) {
 }
 
 let hintHidden = false;
+
+/** First input dismisses the title card, then the controls hint a beat later. */
 function hideHint() {
   if (hintHidden) return;
   hintHidden = true;
-  setTimeout(() => hintEl.classList.add('fade'), 1200);
+  ui.title.classList.add('fade');
+  setTimeout(() => ui.hint.classList.add('fade'), 2200);
 }
 
 function onResize() {
