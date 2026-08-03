@@ -1,0 +1,64 @@
+Create a complete, self-contained Three.js car driving game in a single HTML file (or the minimum number of files required).
+
+Requirements:
+
+Gameplay
+- The player controls a car driving forward on a three-lane road.
+- Hold SPACE to accelerate.
+- When SPACE is released, the car should smoothly decelerate due to friction.
+- Press A to steer left.
+- Press D to steer right.
+- Steering should only have a noticeable effect while the car is moving.
+- Clamp the car so it cannot leave the road.
+
+Physics
+- Use simple arcade-style physics.
+- Include:
+  - currentSpeed
+  - maxSpeed
+  - acceleration
+  - braking/friction
+  - steering sensitivity based on speed
+- Movement should feel smooth and responsive.
+- Use delta time so movement is frame-rate independent.
+
+World
+- Create an infinitely scrolling road.
+- Add lane markings.
+- Add grass on both sides.
+- Add simple roadside objects (trees, signs, rocks) that repeat.
+- Include lighting, shadows, and a sky-colored background.
+
+Car
+- Build the car from simple Three.js primitives (boxes, cylinders, etc.).
+- Rotate the front wheels slightly while steering.
+- Camera follows behind and slightly above the car with smooth interpolation.
+
+Visuals
+- Modern clean appearance.
+- Soft shadows.
+- Directional sunlight.
+- Ambient light.
+- Smooth animations.
+- Display current speed in the top-left corner.
+
+Game Loop
+- Use requestAnimationFrame().
+- Organize code into functions:
+  - init()
+  - createCar()
+  - createRoad()
+  - updatePhysics()
+  - updateCamera()
+  - animate()
+
+Controls
+- SPACE = accelerate
+- A = steer left
+- D = steer right
+
+Do not use external game engines or physics libraries—only Three.js.
+
+Keep the code clean, commented, and easy to extend.
+
+The finished result should feel like a simple endless driving game where the player continuously drives down an infinite highway.
