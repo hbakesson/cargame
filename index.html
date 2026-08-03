@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Endless Drive — Three.js</title>
+<style>
+  :root {
+    --ui-fg: #f4f7fb;
+    --ui-dim: rgba(244, 247, 251, 0.65);
+    --ui-panel: rgba(12, 18, 28, 0.42);
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #8ec5e8;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ui-fg);
+  }
+
+  canvas { display: block; }
+
+  /* ---- Speed HUD (top-left) ---- */
+  #hud {
+    position: fixed;
+    top: 18px;
+    left: 18px;
+    padding: 14px 18px 16px;
+    border-radius: 14px;
+    background: var(--ui-panel);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    user-select: none;
+    pointer-events: none;
+    min-width: 168px;
+  }
+
+  #speed-label {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ui-dim);
+  }
+
+  #speed-value {
+    font-variant-numeric: tabular-nums;
+    font-size: 44px;
+    font-weight: 650;
+    line-height: 1.05;
+    margin-top: 2px;
+  }
+
+  #speed-value span {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ui-dim);
+    margin-left: 4px;
+  }
+
+  #speed-bar {
+    margin-top: 10px;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.18);
+    overflow: hidden;
+  }
+
+  #speed-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #6ee7a8, #ffd76e 65%, #ff7a6b);
+    transition: width 0.06s linear;
+  }
+
+  /* ---- Controls hint ---- */
+  #hint {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 16px;
+    border-radius: 12px;
+    background: var(--ui-panel);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    font-size: 13px;
+    color: var(--ui-dim);
+    user-select: none;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+
+  #hint.fade { opacity: 0; }
+
+  kbd {
+    display: inline-block;
+    padding: 2px 7px;
+    margin: 0 2px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-bottom-width: 2px;
+    color: var(--ui-fg);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="speed-label">Speed</div>
+  <div id="speed-value">0<span>km/h</span></div>
+  <div id="speed-bar"><div id="speed-bar-fill"></div></div>
+</div>
+
+<div id="hint">
+  <kbd>SPACE</kbd> accelerate &nbsp;·&nbsp; <kbd>A</kbd> steer left &nbsp;·&nbsp; <kbd>D</kbd> steer right
+</div>
+
+<!-- Three.js as an ES module from CDN (no game engine, no physics library) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* =========================================================================
+   CONFIG — tune these to change how the game feels
+   ========================================================================= */
+const CONFIG = {
+  // --- Road layout ---
+  laneCount:      3,
+  laneWidth:      4,      // world units per lane
+  segmentLength:  40,     // length of one recycled road chunk
+  segmentCount:   14,     // chunks alive at once (560 units of visible road)
+
+  // --- Arcade physics ---
+  maxSpeed:       60,     // units/second (~216 km/h)
+  acceleration:   16,     // units/second² while SPACE is held
+  friction:       9,      // constant rolling deceleration when coasting
+  airDrag:        0.15,   // extra deceleration proportional to speed
+
+  steerRate:      2.4,    // how fast heading builds while steering
+  steerReturn:    3.2,    // how fast heading self-centers when not steering
+  maxHeading:     0.42,   // radians — the car can never swing fully sideways
+  steerMinSpeed:  0.06,   // speed fraction below which steering barely bites
+
+  wheelRadius:    0.42,
+
+  // --- Chase camera ---
+  camHeight:      4.2,
+  camDistance:    9.5,
+  camLookAhead:  -9,      // how far in front of the car the camera aims
+  camLerp:        4.5,    // smoothing strength (higher = snappier)
+  baseFov:        62,
+
+  // --- Look ---
+  skyColor:       0x8ec5e8,
+  fogNear:        120,
+  fogFar:         420,
+};
+
+// Derived road measurements
+const ROAD_WIDTH     = CONFIG.laneCount * CONFIG.laneWidth;   // 12
+const ROAD_HALF      = ROAD_WIDTH / 2;
+const SHOULDER       = 1.6;                                   // paved margin outside the lanes
+const TOTAL_ROAD_LEN = CONFIG.segmentCount * CONFIG.segmentLength;
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+let renderer, scene, camera, clock;
+let car, frontLeftPivot, frontRightPivot;
+let wheelMeshes = [];
+let roadSegments = [];      // pool of recycled world chunks
+
+// Car physics state
+const physics = {
+  currentSpeed: 0,   // forward speed along the car's heading
+  heading:      0,   // radians; 0 = straight down the road
+  steerInput:   0,   // -1 (left) .. +1 (right)
+  x:            0,   // lateral position on the road
+  wheelSpin:    0,   // accumulated wheel rotation
+};
+
+// Keyboard state
+const keys = { accelerate: false, left: false, right: false };
+
+// Reusable temporaries so the loop allocates nothing
+const _camTarget  = new THREE.Vector3();
+const _lookTarget = new THREE.Vector3();
+
+// HUD elements
+const speedValueEl = document.getElementById('speed-value');
+const speedFillEl  = document.getElementById('speed-bar-fill');
+const hintEl       = document.getElementById('hint');
+
+/* =========================================================================
+   SHARED MATERIALS / GEOMETRY
+   Built once and reused, so recycling the world stays cheap.
+   ========================================================================= */
+const MATERIALS = {
+  road:      new THREE.MeshStandardMaterial({ color: 0x3b4048, roughness: 0.95 }),
+  shoulder:  new THREE.MeshStandardMaterial({ color: 0x2f343b, roughness: 1.0 }),
+  grass:     new THREE.MeshStandardMaterial({ color: 0x6faa5e, roughness: 1.0 }),
+  grassDark: new THREE.MeshStandardMaterial({ color: 0x5f9a51, roughness: 1.0 }),
+  lineWhite: new THREE.MeshStandardMaterial({ color: 0xf2f4f0, roughness: 0.7 }),
+  trunk:     new THREE.MeshStandardMaterial({ color: 0x6b4b32, roughness: 1.0 }),
+  leaves:    new THREE.MeshStandardMaterial({ color: 0x3f7f45, roughness: 1.0, flatShading: true }),
+  leavesAlt: new THREE.MeshStandardMaterial({ color: 0x4f8f3f, roughness: 1.0, flatShading: true }),
+  rock:      new THREE.MeshStandardMaterial({ color: 0x8b8d90, roughness: 1.0, flatShading: true }),
+  signPost:  new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.6, metalness: 0.3 }),
+  signFace:  new THREE.MeshStandardMaterial({ color: 0xf0c419, roughness: 0.6 }),
+  signFace2: new THREE.MeshStandardMaterial({ color: 0x3d7de0, roughness: 0.6 }),
+};
+
+const GEOMETRY = {
+  dash:     new THREE.PlaneGeometry(0.22, 3),
+  edgeLine: new THREE.PlaneGeometry(0.18, CONFIG.segmentLength),
+  trunk:    new THREE.CylinderGeometry(0.18, 0.26, 2.2, 6),
+  cone:     new THREE.ConeGeometry(1.35, 3.2, 7),
+  rock:     new THREE.DodecahedronGeometry(0.6, 0),
+  post:     new THREE.BoxGeometry(0.12, 2.4, 0.12),
+  panel:    new THREE.BoxGeometry(1.5, 1.0, 0.09),
+  patch:    new THREE.CircleGeometry(3.2, 8),
+};
+
+/* =========================================================================
+   init() — renderer, scene, lights, world, car, event listeners
+   ========================================================================= */
+function init() {
+  // --- Renderer ---
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;   // soft shadows
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  document.body.appendChild(renderer.domElement);
+
+  // --- Scene: sky-coloured background + matching fog to hide the road's end ---
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(CONFIG.skyColor);
+  scene.fog = new THREE.Fog(CONFIG.skyColor, CONFIG.fogNear, CONFIG.fogFar);
+
+  // --- Camera ---
+  camera = new THREE.PerspectiveCamera(CONFIG.baseFov, window.innerWidth / window.innerHeight, 0.1, 800);
+  camera.position.set(0, CONFIG.camHeight, CONFIG.camDistance);
+
+  clock = new THREE.Clock();
+
+  createLights();
+  createRoad();
+  createCar();
+
+  window.addEventListener('resize', onResize);
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+}
+
+/* -------------------------------------------------------------------------
+   Lighting: directional "sun" for shadows + hemisphere ambient for fill
+   ------------------------------------------------------------------------- */
+function createLights() {
+  const ambient = new THREE.HemisphereLight(0xbfe3ff, 0x5c7a4a, 0.85);
+  scene.add(ambient);
+
+  const sun = new THREE.DirectionalLight(0xfff3dd, 2.1);
+  sun.position.set(-40, 55, 25);
+  sun.castShadow = true;
+
+  // The world scrolls past a car that stays near the origin, so one fixed
+  // shadow camera around the origin always covers what's on screen.
+  const s = 55;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left   = -s;
+  sun.shadow.camera.right  =  s;
+  sun.shadow.camera.top    =  s;
+  sun.shadow.camera.bottom = -s;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far  = 160;
+  sun.shadow.bias = -0.0008;
+  sun.shadow.normalBias = 0.02;
+
+  scene.add(sun);
+  scene.add(sun.target);   // target defaults to (0, 0, 0)
+}
+
+/* =========================================================================
+   createRoad() — grass ground plus a pool of recycled road segments
+   ========================================================================= */
+function createRoad() {
+  // Grass on both sides. It is featureless, so it doesn't need to scroll —
+  // the roadside props supply every motion cue.
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(900, 1600), MATERIALS.grass);
+  grass.rotation.x = -Math.PI / 2;
+  grass.position.set(0, -0.02, -600);
+  grass.receiveShadow = true;
+  scene.add(grass);
+
+  // Segment pool: each chunk owns its asphalt, markings and scenery.
+  for (let i = 0; i < CONFIG.segmentCount; i++) {
+    const segment = createRoadSegment();
+    segment.position.z = -i * CONFIG.segmentLength;
+    populateSegment(segment);
+    scene.add(segment);
+    roadSegments.push(segment);
+  }
+}
+
+/**
+ * Builds one road chunk: asphalt + shoulders + solid edge lines + dashed lane
+ * dividers. The chunk is centred on its own origin, spanning ±length/2 in Z.
+ */
+function createRoadSegment() {
+  const len = CONFIG.segmentLength;
+  const group = new THREE.Group();
+
+  // Asphalt (three lanes plus paved shoulders)
+  const asphalt = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROAD_WIDTH + SHOULDER * 2, len),
+    MATERIALS.road
+  );
+  asphalt.rotation.x = -Math.PI / 2;
+  asphalt.receiveShadow = true;
+  group.add(asphalt);
+
+  // Slightly darker strips so the shoulders read as separate from the lanes
+  for (const side of [-1, 1]) {
+    const shoulder = new THREE.Mesh(new THREE.PlaneGeometry(SHOULDER, len), MATERIALS.shoulder);
+    shoulder.rotation.x = -Math.PI / 2;
+    shoulder.position.set(side * (ROAD_HALF + SHOULDER / 2), 0.005, 0);
+    shoulder.receiveShadow = true;
+    group.add(shoulder);
+  }
+
+  // Solid white edge lines
+  for (const side of [-1, 1]) {
+    const edge = new THREE.Mesh(GEOMETRY.edgeLine, MATERIALS.lineWhite);
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.set(side * (ROAD_HALF - 0.18), 0.012, 0);
+    group.add(edge);
+  }
+
+  // Dashed dividers between lanes
+  const dashPeriod = 8;                        // 3 units of dash, 5 of gap
+  const dashes = Math.round(len / dashPeriod);
+  for (let lane = 1; lane < CONFIG.laneCount; lane++) {
+    const x = -ROAD_HALF + lane * CONFIG.laneWidth;
+    for (let d = 0; d < dashes; d++) {
+      const dash = new THREE.Mesh(GEOMETRY.dash, MATERIALS.lineWhite);
+      dash.rotation.x = -Math.PI / 2;
+      dash.position.set(x, 0.012, -len / 2 + dashPeriod * (d + 0.5));
+      group.add(dash);
+    }
+  }
+
+  // Container for the randomised scenery, so it can be cleared on recycle
+  const props = new THREE.Group();
+  props.name = 'props';
+  group.add(props);
+
+  return group;
+}
+
+/* -------------------------------------------------------------------------
+   Roadside scenery — regenerated whenever a segment is recycled, so the
+   world repeats endlessly without looking like a loop.
+   ------------------------------------------------------------------------- */
+function populateSegment(segment) {
+  const props = segment.getObjectByName('props');
+  props.clear();
+
+  const len  = CONFIG.segmentLength;
+  const edge = ROAD_HALF + SHOULDER;           // first free spot off the asphalt
+
+  // Flat colour patches to break up the grass
+  for (let i = 0; i < 2; i++) {
+    const patch = new THREE.Mesh(GEOMETRY.patch, MATERIALS.grassDark);
+    patch.rotation.x = -Math.PI / 2;
+    patch.position.set(randSide() * (edge + rand(2, 40)), 0.0, rand(-len / 2, len / 2));
+    patch.scale.setScalar(rand(0.6, 1.6));
+    props.add(patch);
+  }
+
+  // Trees — the main sense of speed
+  const treeCount = Math.round(rand(4, 8));
+  for (let i = 0; i < treeCount; i++) {
+    props.add(makeTree(randSide() * (edge + rand(3, 45)), rand(-len / 2, len / 2)));
+  }
+
+  // Rocks scattered near the shoulder
+  const rockCount = Math.round(rand(1, 4));
+  for (let i = 0; i < rockCount; i++) {
+    props.add(makeRock(randSide() * (edge + rand(1.2, 12)), rand(-len / 2, len / 2)));
+  }
+
+  // Occasional road sign, angled toward the driver
+  if (Math.random() < 0.55) {
+    props.add(makeSign(randSide() * (edge + rand(1.0, 2.4)), rand(-len / 2, len / 2)));
+  }
+}
+
+function makeTree(x, z) {
+  const tree = new THREE.Group();
+
+  const trunk = new THREE.Mesh(GEOMETRY.trunk, MATERIALS.trunk);
+  trunk.position.y = 1.1;
+  trunk.castShadow = true;
+  tree.add(trunk);
+
+  // Two stacked cones give a cheap but pleasant conifer silhouette
+  const mat = Math.random() < 0.5 ? MATERIALS.leaves : MATERIALS.leavesAlt;
+
+  const lower = new THREE.Mesh(GEOMETRY.cone, mat);
+  lower.position.y = 3.0;
+  lower.castShadow = true;
+  tree.add(lower);
+
+  const upper = new THREE.Mesh(GEOMETRY.cone, mat);
+  upper.position.y = 4.5;
+  upper.scale.setScalar(0.7);
+  upper.castShadow = true;
+  tree.add(upper);
+
+  tree.position.set(x, 0, z);
+  tree.rotation.y = rand(0, Math.PI * 2);
+  tree.scale.setScalar(rand(0.75, 1.45));
+  return tree;
+}
+
+function makeRock(x, z) {
+  const rock = new THREE.Mesh(GEOMETRY.rock, MATERIALS.rock);
+  rock.position.set(x, rand(0.15, 0.35), z);
+  rock.rotation.set(rand(0, 3), rand(0, 3), rand(0, 3));
+  rock.scale.set(rand(0.6, 1.5), rand(0.5, 1.0), rand(0.6, 1.5));
+  rock.castShadow = true;
+  return rock;
+}
+
+function makeSign(x, z) {
+  const sign = new THREE.Group();
+
+  const post = new THREE.Mesh(GEOMETRY.post, MATERIALS.signPost);
+  post.position.y = 1.2;
+  post.castShadow = true;
+  sign.add(post);
+
+  const panel = new THREE.Mesh(
+    GEOMETRY.panel,
+    Math.random() < 0.5 ? MATERIALS.signFace : MATERIALS.signFace2
+  );
+  panel.position.y = 2.1;
+  panel.castShadow = true;
+  sign.add(panel);
+
+  sign.position.set(x, 0, z);
+  sign.rotation.y = (x > 0 ? -1 : 1) * 0.28;   // face the oncoming car
+  return sign;
+}
+
+/* =========================================================================
+   createCar() — assembled entirely from Three.js primitives
+   ========================================================================= */
+function createCar() {
+  car = new THREE.Group();
+  wheelMeshes = [];
+
+  const bodyMat  = new THREE.MeshStandardMaterial({ color: 0xd8383c, roughness: 0.35, metalness: 0.35 });
+  const cabinMat = new THREE.MeshStandardMaterial({ color: 0xb32b30, roughness: 0.35, metalness: 0.35 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x1e2a38, roughness: 0.1,  metalness: 0.6 });
+  const tireMat  = new THREE.MeshStandardMaterial({ color: 0x1b1c1f, roughness: 0.9 });
+  const rimMat   = new THREE.MeshStandardMaterial({ color: 0xd6d9de, roughness: 0.3, metalness: 0.8 });
+  const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff2c4, emissive: 0xffe9a8, emissiveIntensity: 0.8 });
+  const brakeMat = new THREE.MeshStandardMaterial({ color: 0xff4433, emissive: 0x992018, emissiveIntensity: 0.6 });
+
+  // --- Lower body ---
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.55, 4.4), bodyMat);
+  body.position.y = 0.62;
+  body.castShadow = true;
+  car.add(body);
+
+  // --- Hood/trunk deck, a touch narrower for a chamfered look ---
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.22, 4.0), bodyMat);
+  deck.position.y = 0.96;
+  deck.castShadow = true;
+  car.add(deck);
+
+  // --- Cabin ---
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.6, 1.9), cabinMat);
+  cabin.position.set(0, 1.32, 0.25);
+  cabin.castShadow = true;
+  car.add(cabin);
+
+  // --- Glass: windscreen, rear window, side windows ---
+  const windscreen = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.5, 0.1), glassMat);
+  windscreen.position.set(0, 1.34, -0.68);
+  windscreen.rotation.x = -0.32;
+  car.add(windscreen);
+
+  const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.46, 0.1), glassMat);
+  rearGlass.position.set(0, 1.34, 1.18);
+  rearGlass.rotation.x = 0.34;
+  car.add(rearGlass);
+
+  for (const side of [-1, 1]) {
+    const sideGlass = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 1.6), glassMat);
+    sideGlass.position.set(side * 0.86, 1.34, 0.25);
+    car.add(sideGlass);
+  }
+
+  // --- Headlights and tail lights (the car faces -Z) ---
+  for (const side of [-1, 1]) {
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.1), lightMat);
+    head.position.set(side * 0.62, 0.74, -2.2);
+    car.add(head);
+
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.1), brakeMat);
+    tail.position.set(side * 0.68, 0.78, 2.2);
+    car.add(tail);
+  }
+
+  // --- Wheels ---
+  // The geometry is pre-rotated so the cylinder axis runs along X. Each wheel
+  // then lives in a pivot group: the pivot yaws for steering, the mesh inside
+  // spins for rolling — so the two rotations never fight each other.
+  const tireGeo = new THREE.CylinderGeometry(CONFIG.wheelRadius, CONFIG.wheelRadius, 0.34, 18);
+  tireGeo.rotateZ(Math.PI / 2);
+  const rimGeo = new THREE.CylinderGeometry(CONFIG.wheelRadius * 0.55, CONFIG.wheelRadius * 0.55, 0.36, 10);
+  rimGeo.rotateZ(Math.PI / 2);
+
+  const wheelSpecs = [
+    { x: -1.02, z: -1.45, front: true  },
+    { x:  1.02, z: -1.45, front: true  },
+    { x: -1.02, z:  1.50, front: false },
+    { x:  1.02, z:  1.50, front: false },
+  ];
+
+  for (const spec of wheelSpecs) {
+    const pivot = new THREE.Group();
+    pivot.position.set(spec.x, CONFIG.wheelRadius, spec.z);
+
+    const tire = new THREE.Mesh(tireGeo, tireMat);
+    tire.castShadow = true;
+    tire.add(new THREE.Mesh(rimGeo, rimMat));
+
+    pivot.add(tire);
+    car.add(pivot);
+    wheelMeshes.push(tire);
+
+    if (spec.front) {
+      if (spec.x < 0) frontLeftPivot = pivot;
+      else            frontRightPivot = pivot;
+    }
+  }
+
+  scene.add(car);
+}
+
+/* =========================================================================
+   updatePhysics() — arcade driving model, fully delta-time driven
+   =========================================================================
+   The car never actually moves along Z. The world scrolls toward it instead,
+   which keeps every coordinate near the origin (stable shadows, no floating
+   point drift) while producing a genuinely endless road.
+   ========================================================================= */
+function updatePhysics(dt) {
+  const p = physics;
+
+  // --- Longitudinal: throttle vs. friction ---
+  if (keys.accelerate) {
+    p.currentSpeed += CONFIG.acceleration * dt;
+  } else {
+    // Constant rolling friction plus speed-proportional air drag, so the car
+    // sheds speed quickly at first and then coasts down smoothly.
+    p.currentSpeed -= (CONFIG.friction + p.currentSpeed * CONFIG.airDrag) * dt;
+  }
+  p.currentSpeed = clamp(p.currentSpeed, 0, CONFIG.maxSpeed);
+
+  // --- Steering input ---
+  p.steerInput = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+
+  // Steering authority scales with speed: a stopped car cannot turn at all,
+  // and the response tapers off again near top speed so it stays stable.
+  const speedRatio       = p.currentSpeed / CONFIG.maxSpeed;
+  const grip             = smoothstep(0, CONFIG.steerMinSpeed * 4, speedRatio);
+  const highSpeedFalloff = 1 - 0.45 * speedRatio;
+  const authority        = grip * highSpeedFalloff;
+
+  if (p.steerInput !== 0) {
+    p.heading += p.steerInput * CONFIG.steerRate * authority * dt;
+  } else {
+    // Self-centering: heading eases back toward straight ahead
+    p.heading -= p.heading * Math.min(1, CONFIG.steerReturn * dt);
+  }
+  p.heading = clamp(p.heading, -CONFIG.maxHeading, CONFIG.maxHeading);
+
+  // --- Resolve heading into sideways drift and forward travel ---
+  const lateral = Math.sin(p.heading) * p.currentSpeed * dt;
+  const forward = Math.cos(p.heading) * p.currentSpeed * dt;
+
+  p.x += lateral;
+
+  // --- Clamp the car to the road (lanes plus a little of the shoulder) ---
+  const limit = ROAD_HALF + SHOULDER * 0.5 - 1.0;   // 1.0 ≈ half the car's width
+  if (p.x > limit || p.x < -limit) {
+    p.x = clamp(p.x, -limit, limit);
+    p.heading *= 0.85;   // straighten out instead of grinding along the edge
+  }
+
+  // --- Apply to the visible car ---
+  car.position.x = p.x;
+  car.rotation.y = -p.heading;      // steering right (+heading) = negative yaw
+
+  // Subtle body roll into the turn
+  car.rotation.z = THREE.MathUtils.lerp(car.rotation.z, p.heading * 0.22, 1 - Math.exp(-8 * dt));
+
+  // --- Front wheels turn slightly with the steering input ---
+  const targetSteerAngle = -p.steerInput * 0.45;
+  const wheelBlend = 1 - Math.exp(-12 * dt);
+  frontLeftPivot.rotation.y  = THREE.MathUtils.lerp(frontLeftPivot.rotation.y,  targetSteerAngle, wheelBlend);
+  frontRightPivot.rotation.y = THREE.MathUtils.lerp(frontRightPivot.rotation.y, targetSteerAngle, wheelBlend);
+
+  // --- Roll every wheel at the rate the current speed implies ---
+  p.wheelSpin += forward / CONFIG.wheelRadius;
+  for (const wheel of wheelMeshes) wheel.rotation.x = p.wheelSpin;
+
+  // --- Scroll the world underneath the car ---
+  scrollWorld(forward);
+
+  updateHUD();
+}
+
+/**
+ * Moves every road segment toward the camera and wraps any chunk that has
+ * passed behind it back to the far end — this is the infinite highway.
+ */
+function scrollWorld(distance) {
+  const recycleAt = CONFIG.segmentLength * 1.5;   // safely behind the camera
+
+  for (const segment of roadSegments) {
+    segment.position.z += distance;
+
+    if (segment.position.z > recycleAt) {
+      segment.position.z -= TOTAL_ROAD_LEN;
+      populateSegment(segment);                   // fresh scenery on every lap
+    }
+  }
+}
+
+/* =========================================================================
+   updateCamera() — chase camera, behind and above, smoothly interpolated
+   ========================================================================= */
+function updateCamera(dt) {
+  const speedRatio = physics.currentSpeed / CONFIG.maxSpeed;
+
+  // Target: behind and above the car, drifting sideways with it and pulling
+  // back a little as speed rises.
+  _camTarget.set(
+    physics.x * 0.55,
+    CONFIG.camHeight   + speedRatio * 0.35,
+    CONFIG.camDistance + speedRatio * 1.6
+  );
+
+  // Exponential smoothing — frame-rate independent, unlike a raw lerp factor
+  const blend = 1 - Math.exp(-CONFIG.camLerp * dt);
+  camera.position.lerp(_camTarget, blend);
+
+  // Aim down the road, slightly ahead of the car
+  _lookTarget.set(physics.x * 0.4, 1.1, CONFIG.camLookAhead);
+  camera.lookAt(_lookTarget);
+
+  // A touch of FOV stretch sells the speed
+  const targetFov = CONFIG.baseFov + speedRatio * 10;
+  camera.fov += (targetFov - camera.fov) * blend;
+  camera.updateProjectionMatrix();
+}
+
+/* =========================================================================
+   HUD — current speed, top-left
+   ========================================================================= */
+function updateHUD() {
+  const kmh = Math.round(physics.currentSpeed * 3.6);
+  speedValueEl.innerHTML = kmh + '<span>km/h</span>';
+  speedFillEl.style.width = (physics.currentSpeed / CONFIG.maxSpeed * 100).toFixed(1) + '%';
+}
+
+/* =========================================================================
+   animate() — the main loop
+   ========================================================================= */
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Clamp dt so an alt-tab pause can't teleport the car down the road
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  updatePhysics(dt);
+  updateCamera(dt);
+
+  renderer.render(scene, camera);
+}
+
+/* =========================================================================
+   INPUT & EVENTS
+   ========================================================================= */
+function onKeyDown(event) {
+  switch (event.code) {
+    case 'Space':
+      keys.accelerate = true;
+      event.preventDefault();      // don't let SPACE scroll the page
+      hideHint();
+      break;
+    case 'KeyA':
+    case 'ArrowLeft':
+      keys.left = true;
+      hideHint();
+      break;
+    case 'KeyD':
+    case 'ArrowRight':
+      keys.right = true;
+      hideHint();
+      break;
+  }
+}
+
+function onKeyUp(event) {
+  switch (event.code) {
+    case 'Space':      keys.accelerate = false; break;
+    case 'KeyA':
+    case 'ArrowLeft':  keys.left  = false; break;
+    case 'KeyD':
+    case 'ArrowRight': keys.right = false; break;
+  }
+}
+
+let hintHidden = false;
+function hideHint() {
+  if (hintHidden) return;
+  hintHidden = true;
+  setTimeout(() => hintEl.classList.add('fade'), 1200);
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+/* =========================================================================
+   UTILITIES
+   ========================================================================= */
+function clamp(v, min, max) { return v < min ? min : (v > max ? max : v); }
+function rand(min, max)     { return min + Math.random() * (max - min); }
+function randSide()         { return Math.random() < 0.5 ? -1 : 1; }
+
+/** Smooth 0..1 ramp between two edges. */
+function smoothstep(edge0, edge1, x) {
+  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+/* ========================================================================= */
+init();
+animate();
+</script>
+</body>
+</html>
