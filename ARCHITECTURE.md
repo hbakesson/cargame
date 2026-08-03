@@ -186,12 +186,12 @@ title ──any key──▶ driving ──hit a car──▶ crashing ──1.3
 ```
 
 - **`title`** — attract mode. The car cruises at `attractSpeed`, traffic is
-  hidden, the lap timer and difficulty are frozen at zero, and the chiptune
+  hidden, the lap timer and difficulty are frozen at zero, and the title tune
   plays.
 - **`driving`** — the only state where input, scoring, difficulty and collisions
-  are live.
+  are live; the driving track plays underneath the engine.
 - **`crashing`** — input ignored, `timeScale` eases to 0.16, the camera shakes,
-  a red vignette fades in.
+  a red vignette fades in, and the music fades out with it.
 - **`over`** — the loop still renders but skips all simulation; the leaderboard
   is shown.
 
@@ -276,10 +276,17 @@ Pitch comes from speed folded into five fake gears, so it climbs and drops.
 Filter cutoff opens with speed and throttle. Only three long-lived nodes; the
 per-frame work is `setTargetAtTime` calls.
 
-**The title tune** — one-shot oscillators per note, scheduled ahead of time.
-The arpeggio is the exception: a single continuous oscillator whose *frequency*
-is rescheduled at 50 Hz, which is both how the SID actually faked a chord from
-one voice and the reason it never clicks between steps.
+**The music** — one-shot oscillators per note, scheduled ahead of time. The
+arpeggio is the exception: a single continuous oscillator whose *frequency* is
+rescheduled at 50 Hz, which is both how the SID actually faked a chord from one
+voice and the reason it never clicks between steps.
+
+Two tracks share that engine, and neither is code — a track is a `TRACKS` entry
+holding chords (root + semitone offsets), step-indexed patterns, and switches
+for which voices are in play. `scheduleStep()` reads it all from
+`musicState.track`, so the title tune (minor, arpeggio-driven) and the driving
+tune (major sevenths, slap bass, offbeat stabs) are the same code path with
+different data. `playTrack()` cross-fades between them.
 
 Timing uses the standard lookahead pattern: a 25 ms `setInterval` decides
 *what* to play and hands WebAudio precise timestamps for *when*. The audio clock
@@ -303,7 +310,7 @@ returns false and the first key drives immediately — no dead end.
 | A new difficulty lever | an easy/hard pair in `CONFIG`, read through `difficultyMix()` |
 | A new game state | a branch in `animate()` and in `updatePhysics()`'s input gate |
 | New HUD | an element in `ui`, and a change-guarded write (never `innerHTML` per frame) |
-| A different tune | `CHORDS`, `BASS`, `LEAD` — plain data |
+| A different tune | a `TRACKS` entry — plain data — then `playTrack('name')` |
 
 Two rules worth keeping:
 

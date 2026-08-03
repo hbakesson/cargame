@@ -208,10 +208,13 @@ is always a way through.
 Audio can only start from a user gesture, so it initializes on your first
 keypress.
 
-### The title tune
+### The music
 
-The C64 chiptune on the title screen is synthesized from scratch — no samples,
-no audio files. It's built from the tricks Rob Hubbard used on the SID:
+Two tracks, both synthesized from scratch — no samples, no audio files. They
+share one engine and are described entirely as data in `TRACKS`.
+
+**Title screen** — the C64 action idiom, built from the tricks Rob Hubbard used
+on the SID:
 
 - A square-wave bass hammering octave-jumping eighth notes
 - A chord **arpeggio cycled at 50 Hz** — one note per PAL frame, the SID's way
@@ -220,12 +223,21 @@ no audio files. It's built from the tricks Rob Hubbard used on the SID:
   original, which also means it never clicks between steps.
 - A vibrato'd sawtooth lead through a slapback echo, standing in for a fourth
   voice nobody had
-- Noise-burst drums (kick, snare, hat)
 
 Eight bars in A minor, `i – VI – VII – i / iv – VI – VII – V`, at 138 BPM.
+
+**Driving** — the sunny arcade-racer idiom instead: bright F major with jazz
+seventh voicings (`Fmaj7 – Dm7 – Gm7 – C7`), a plucky filtered-sawtooth slap
+bass, chord stabs on the "and" of every beat, and a 16th-note shaker. 128 BPM,
+mixed at 0.15 so it sits under the engine rather than over it. It fades out as
+you crash and cross-fades back in when you continue.
+
 A lookahead scheduler (`setInterval` decides *what*, WebAudio decides *when*)
-keeps it in time regardless of frame rate. Edit `CHORDS`, `BASS` and `LEAD` to
-write your own.
+keeps both in time regardless of frame rate.
+
+To write your own, edit a track in `TRACKS`: `chords` are a root plus semitone
+offsets, `bass`/`kick`/`snare`/`hat` are indexed by sixteenth-note step, and
+`lead` entries are `[step, MIDI note, length in steps]`.
 
 ---
 
@@ -306,7 +318,7 @@ All in `index.html`, in roughly this order:
 | `updateTraffic()` / `checkCollisions()` | Traffic motion, crashes, near misses |
 | `updateCamera()` | Chase camera, lateral lag, shake, FOV stretch |
 | `initAudio()` / `updateAudio()` | The WebAudio engine |
-| `startMusic()` / `scheduleMusic()` / `scheduleStep()` | The title chiptune and its scheduler |
+| `startMusic()` / `playTrack()` / `scheduleMusic()` / `scheduleStep()` | The two chiptunes and their scheduler |
 | `wakeAudio()` | Unlocks audio from the first gesture |
 | `startGame()` / `resetRun()` / `resumeDriving()` | Starting a run, and putting the car back on the road |
 | `crash()` / `continueRun()` / `restart()` / `updateCrashSequence()` | Game state machine |
@@ -333,8 +345,8 @@ A few things the structure is already set up for:
 - **A different difficulty curve** — everything funnels through `game.difficulty`
   in `updateLaps()`. Swap the exponential for a per-lap step, or drive it from
   `game.lap` instead of elapsed time, and the whole game follows.
-- **Your own tune** — `CHORDS`, `BASS` and `LEAD` are plain data; `LEAD` entries
-  are `[step, MIDI note, length in steps]`.
+- **Your own tune** — a `TRACKS` entry is plain data. Add a third track and call
+  `playTrack('name')` wherever it belongs.
 
 ---
 
