@@ -295,8 +295,8 @@
 </div>
 
 <div id="hint" class="panel">
-  <kbd>SPACE</kbd> accelerate &nbsp;·&nbsp; <kbd>S</kbd> brake / reverse &nbsp;·&nbsp;
-  <kbd>A</kbd> left &nbsp;·&nbsp; <kbd>D</kbd> right &nbsp;·&nbsp; <kbd>M</kbd> mute
+  <kbd>SPACE</kbd> accelerate &nbsp;·&nbsp; <kbd>M</kbd> brake / reverse &nbsp;·&nbsp;
+  <kbd>A</kbd> left &nbsp;·&nbsp; <kbd>D</kbd> right &nbsp;·&nbsp; <kbd>N</kbd> mute
 </div>
 
 <div id="muted-tag">MUTED</div>
@@ -1431,7 +1431,7 @@ function onKeyDown(event) {
       hideHint();
       break;
 
-    case 'KeyS':
+    case 'KeyM':
     case 'ArrowDown':
       keys.brake = true;
       hideHint();
@@ -1453,7 +1453,7 @@ function onKeyDown(event) {
       if (game.state === 'over') restart();
       break;
 
-    case 'KeyM':
+    case 'KeyN':
       muted = !muted;
       ui.mutedTag.style.display = muted ? 'block' : 'none';
       break;
@@ -1466,7 +1466,7 @@ function onKeyUp(event) {
       keys.accelerate = false;
       game.awaitingRestartRelease = false;
       break;
-    case 'KeyS':
+    case 'KeyM':
     case 'ArrowDown':  keys.brake = false; break;
     case 'KeyA':
     case 'ArrowLeft':  keys.left  = false; break;
