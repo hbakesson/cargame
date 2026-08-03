@@ -61,16 +61,56 @@ start the tune without leaving the title screen.
 
 ---
 
+## Laps and difficulty
+
+A lap lasts **one minute**. Six seconds before the timer runs out, a checkered
+start/finish gantry is placed on the road exactly where you'll be when it
+expires, so it approaches from the distance rather than materializing on top of
+you. Crossing the line — not the clock hitting zero — is what ends the lap, so
+slowing down never skips one; it just makes the lap take longer. The same
+gantry then recedes as the next lap's start line.
+
+Difficulty climbs from the first second and never stops:
+
+```
+difficulty = 1 - e^(-elapsed / 150)
+```
+
+Every traffic parameter is a blend between an easy end and a hard end:
+
+| | Start | Late in a run |
+| --- | --- | --- |
+| Cars on the road | 5 | up to 14 |
+| Traffic speed | 18–38 | 10–26 (bigger closing speeds) |
+| Spawn distance | 230–680 | 140–430 (less warning) |
+| Gap enforced around a spawn | 48 | 26 |
+
+The one rule that never bends: a spawn is rejected if it would leave no open
+lane. However bad it gets, there is always a way through.
+
 ## Scoring
 
-- **Distance** is the base: `distance × 0.55`, multiplied by `1 + speedRatio` —
-  so covering ground fast is worth up to twice as much as crawling.
-- **Near miss**: +75 for squeezing past a traffic car within `3.4` units without
-  touching it. Each car can only pay out once.
-- **Best score** persists in `localStorage` under `endlessDriveBest`.
+- **Distance** is the base: `distance × 0.55`, multiplied by `1 + speedRatio`
+  and again by `1 + difficulty` — so covering ground fast, deep into a run, is
+  worth several times a cautious start.
+- **Near miss**: +75 for passing a car one lane over without touching it, shown
+  bottom-left. Each car can only pay out once.
+- **Lap bonus**: `500 × the lap you just finished`, so laps compound.
 
-Hitting a traffic car ends the run: the world drops into slow motion, the camera
-shakes, and the game-over card appears after 1.3 seconds.
+## Crashing
+
+Hitting a car drops the world into slow motion, shakes the camera, and after
+1.3 seconds brings up the leaderboard: your score and completed laps, the top
+eight runs, and two choices.
+
+- **`SPACE` — continue this run.** Score, lap counter and difficulty all carry
+  over; only the car is put back in the middle lane. The road ahead is
+  re-rolled.
+- **`R` — start over.** Fresh score, back to lap 1, difficulty back to zero.
+
+The leaderboard lives in `localStorage` under `endlessDriveScores`. Each run
+carries an id, so continuing updates that run's row rather than piling up a new
+entry for every crash.
 
 ---
 
@@ -210,9 +250,14 @@ Every number worth touching is in the `CONFIG` object at the top of the module.
 | --- | --- | --- |
 | `laneCount` / `laneWidth` | `3` / `4` | Road layout; both feed `LANE_X` automatically |
 | `segmentLength` / `segmentCount` | `25` / `26` | Chunk size and view distance |
-| `trafficCount` | `9` | Cars on the road — the main difficulty dial |
-| `trafficMinSpeed` / `trafficMaxSpeed` | `13` / `34` | Slower traffic means bigger closing speeds |
-| `spawnMin` / `spawnMax` | `170` / `640` | How far ahead traffic appears |
+| `trafficStart` / `trafficMax` | `5` / `14` | Cars on the road at each end of the difficulty ramp |
+| `trafficSpeedEasy` / `trafficSpeedHard` | `[18,38]` / `[10,26]` | Slower traffic means bigger closing speeds |
+| `spawnEasy` / `spawnHard` | `[230,680]` / `[140,430]` | How far ahead traffic appears |
+| `spawnGapEasy` / `spawnGapHard` | `48` / `26` | Clear road demanded around a spawn |
+| `difficultyRamp` | `150` | Seconds; lower makes the game get hard faster |
+| `lapDuration` | `60` | Seconds per lap |
+| `finishPreview` | `6` | How early the finish gantry is placed on the road |
+| `lapBonus` | `500` | Multiplied by the lap just finished |
 | `pointsPerUnit` | `0.55` | Base scoring rate |
 | `nearMissDist` / `nearMissBonus` | `4.6` / `75` | Near-miss window and payout |
 
@@ -243,6 +288,9 @@ All in `index.html`, in roughly this order:
 | `buildCar()` | Shared car builder; `simple` mode drops glass and rims for traffic |
 | `createCar()` / `createTraffic()` | The player's car and the nine AI cars |
 | `respawnTraffic()` / `isSpotFree()` | Traffic placement, with the always-open-lane rule |
+| `difficultyMix()` / `activeTrafficCount()` | Blend every traffic parameter along the difficulty ramp |
+| `createFinishLine()` / `updateLaps()` / `completeLap()` | The start/finish gantry and lap timing |
+| `recordRun()` / `renderLeaderboard()` | Persisted top-eight runs |
 | `createSpeedLines()` | The streak buffer |
 | `updatePhysics()` | Throttle, brake, steering, inertia, scoring |
 | `updateWorld()` | Lays the road and traffic out along the curve |
@@ -251,7 +299,8 @@ All in `index.html`, in roughly this order:
 | `initAudio()` / `updateAudio()` | The WebAudio engine |
 | `startMusic()` / `scheduleMusic()` / `scheduleStep()` | The title chiptune and its scheduler |
 | `wakeAudio()` | Unlocks audio from the first gesture |
-| `startGame()` / `crash()` / `restart()` / `updateCrashSequence()` | Game state machine |
+| `startGame()` / `resetRun()` / `resumeDriving()` | Starting a run, and putting the car back on the road |
+| `crash()` / `continueRun()` / `restart()` / `updateCrashSequence()` | Game state machine |
 | `animate()` | The `requestAnimationFrame` loop |
 
 ---

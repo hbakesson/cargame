@@ -102,28 +102,65 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* ---- Near-miss popup ---- */
+  #lap-line {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+
+  #lap-timer.closing { color: #ffe37a; }
+
+  /* ---- Near-miss popup (bottom-left) ---- */
   #nearmiss {
     position: fixed;
-    top: 44%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 26px;
+    bottom: 22px;
+    left: 22px;
+    font-size: 21px;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     color: #ffe37a;
-    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
     opacity: 0;
     user-select: none;
     pointer-events: none;
   }
 
-  #nearmiss.show { animation: pop 0.85s ease-out; }
+  #nearmiss.show { animation: rise 0.9s ease-out; }
+
+  @keyframes rise {
+    0%   { opacity: 0; transform: translateY(16px); }
+    18%  { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-12px); }
+  }
+
+  /* ---- Lap banner (center) ---- */
+  #lap-banner {
+    position: fixed;
+    top: 42%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 34px;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    color: #f4f7fb;
+    text-shadow: 0 3px 24px rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    white-space: nowrap;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  #lap-banner.show { animation: pop 1.6s ease-out; }
 
   @keyframes pop {
     0%   { opacity: 0; transform: translate(-50%, -40%) scale(0.85); }
-    18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
-    100% { opacity: 0; transform: translate(-50%, -72%) scale(1); }
+    12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+    75%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -68%) scale(1); }
   }
 
   /* ---- Crash vignette ---- */
@@ -160,20 +197,18 @@
 
   #gameover h1 {
     margin: 0;
-    font-size: 52px;
+    font-size: clamp(34px, 6vw, 52px);
     font-weight: 700;
     letter-spacing: -0.02em;
   }
 
-  #final-score {
+  #run-summary {
     font-size: 20px;
     font-variant-numeric: tabular-nums;
   }
 
-  #final-best { font-size: 14px; color: var(--ui-dim); font-variant-numeric: tabular-nums; }
-
   #new-best {
-    margin-top: 4px;
+    margin-top: 2px;
     font-size: 14px;
     font-weight: 700;
     color: #ffe37a;
@@ -182,7 +217,75 @@
     display: none;
   }
 
-  #restart-hint { margin-top: 18px; font-size: 14px; color: var(--ui-dim); }
+  /* ---- Leaderboard ---- */
+  #leaderboard {
+    margin-top: 18px;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    min-width: min(560px, 88vw);
+    background: rgba(12, 18, 28, 0.5);
+    border: 1px solid var(--ui-border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  #leaderboard th {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ui-dim);
+    font-weight: 500;
+    text-align: right;
+    padding: 12px 18px 10px;
+    border-bottom: 1px solid var(--ui-border);
+  }
+
+  #leaderboard th:first-child,
+  #leaderboard td:first-child { text-align: left; width: 44px; }
+
+  #leaderboard td {
+    padding: 11px 18px;
+    text-align: right;
+    font-size: 19px;
+    font-weight: 600;
+  }
+
+  #leaderboard tbody tr + tr td { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+
+  #leaderboard td.rank,
+  #leaderboard td.when {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ui-dim);
+  }
+
+  #leaderboard tr.current td { color: #ffe37a; }
+  #leaderboard tr.current td.rank,
+  #leaderboard tr.current td.when { color: rgba(255, 227, 122, 0.75); }
+
+  #leaderboard tr.empty td {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ui-dim);
+  }
+
+  /* ---- Continue / restart ---- */
+  #gameover-actions {
+    margin-top: 24px;
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .choice {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 14px;
+    color: var(--ui-dim);
+  }
 
   /* ---- Start title ---- */
   #title {
@@ -276,17 +379,29 @@
   <div class="label">Score</div>
   <div id="score-value">0</div>
   <div id="best-value">Best 0</div>
+  <div id="lap-line"><span id="lap-number">Lap 1</span> · <span id="lap-timer">1:00</span></div>
 </div>
 
 <div id="nearmiss">NEAR MISS +75</div>
+<div id="lap-banner">LAP 2</div>
 <div id="vignette"></div>
 
 <div id="gameover">
   <h1>CRASHED</h1>
-  <div id="final-score">Score 0</div>
-  <div id="final-best">Best 0</div>
+  <div id="run-summary">Score 0 · 0 laps completed</div>
   <div id="new-best">New best!</div>
-  <div id="restart-hint">Press <kbd>SPACE</kbd> or <kbd>R</kbd> to drive again</div>
+
+  <table id="leaderboard">
+    <thead>
+      <tr><th>#</th><th>Score</th><th>Laps</th><th>When</th></tr>
+    </thead>
+    <tbody id="leaderboard-body"></tbody>
+  </table>
+
+  <div id="gameover-actions">
+    <div class="choice"><kbd>SPACE</kbd><span>Continue this run</span></div>
+    <div class="choice"><kbd>R</kbd><span>Start over</span></div>
+  </div>
 </div>
 
 <div id="title">
@@ -297,6 +412,7 @@
 <div id="hint" class="panel">
   <kbd>SPACE</kbd> accelerate &nbsp;·&nbsp; <kbd>M</kbd> brake / reverse &nbsp;·&nbsp;
   <kbd>A</kbd> left &nbsp;·&nbsp; <kbd>D</kbd> right &nbsp;·&nbsp; <kbd>N</kbd> mute
+  &nbsp;·&nbsp; 1 min per lap
 </div>
 
 <div id="muted-tag">MUTED</div>
@@ -352,11 +468,22 @@ const CONFIG = {
   baseFov:        62,
 
   // --- Traffic ---
-  trafficCount:    9,
-  trafficMinSpeed: 13,
-  trafficMaxSpeed: 34,
-  spawnMin:        170,   // respawn distance ahead of the player
-  spawnMax:        640,
+  // Traffic is described by an easy end and a hard end; `game.difficulty`
+  // slides between them for the whole session.
+  trafficStart:    5,               // cars on the road at the start
+  trafficMax:      14,              // cars once difficulty peaks
+  trafficSpeedEasy: [18, 38],       // slower traffic = bigger closing speed
+  trafficSpeedHard: [10, 26],
+  spawnEasy:       [230, 680],      // how far ahead traffic appears
+  spawnHard:       [140, 430],
+  spawnGapEasy:    48,              // clear road demanded around a spawn
+  spawnGapHard:    26,
+
+  // --- Laps ---
+  lapDuration:     60,    // seconds per lap
+  finishPreview:   6,     // seconds before the line is placed on the road
+  lapBonus:        500,   // multiplied by the lap just finished
+  difficultyRamp:  150,   // seconds — difficulty rises toward 1, never stops
 
   // --- Scoring ---
   pointsPerUnit:   0.55,  // base score rate per unit travelled
@@ -408,6 +535,10 @@ const game = {
   state:      'title',     // 'title' | 'driving' | 'crashing' | 'over'
   distance:   0,           // road distance travelled (drives the whole world)
   score:      0,
+  lap:        1,
+  lapTime:    0,           // seconds into the current lap
+  elapsed:    0,           // seconds of driving this run — drives difficulty
+  difficulty: 0,           // 0..1, always climbing
   best:       Number(localStorage.getItem('endlessDriveBest') || 0),
   timeScale:  1,
   crashTimer: 0,
@@ -424,24 +555,47 @@ const _lookTarget = new THREE.Vector3();
 let camLateral = 0;
 
 // HUD elements
+/* -------------------------------------------------------------------------
+   Leaderboard — the last few runs, best score first, kept in localStorage.
+   Each run carries an id so continuing after a crash updates that run's row
+   rather than piling up a new one every time.
+   ------------------------------------------------------------------------- */
+const LEADERBOARD_KEY = 'endlessDriveScores';
+const LEADERBOARD_SIZE = 8;
+
+function loadLeaderboard() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+let leaderboard = loadLeaderboard();
+
 const ui = {
   speedNumber: document.getElementById('speed-number'),
   speedFill:   document.getElementById('speed-bar-fill'),
   gearNumber:  document.getElementById('gear-number'),
   score:       document.getElementById('score-value'),
   best:        document.getElementById('best-value'),
+  lapNumber:   document.getElementById('lap-number'),
+  lapTimer:    document.getElementById('lap-timer'),
+  lapBanner:   document.getElementById('lap-banner'),
   nearmiss:    document.getElementById('nearmiss'),
   vignette:    document.getElementById('vignette'),
   gameover:    document.getElementById('gameover'),
-  finalScore:  document.getElementById('final-score'),
-  finalBest:   document.getElementById('final-best'),
+  runSummary:  document.getElementById('run-summary'),
+  board:       document.getElementById('leaderboard-body'),
   newBest:     document.getElementById('new-best'),
   title:       document.getElementById('title'),
   titleHint:   document.getElementById('title-hint'),
   hint:        document.getElementById('hint'),
   mutedTag:    document.getElementById('muted-tag'),
 };
-let lastKmh = -1, lastScore = -1, lastGear = -1;   // avoid needless DOM writes
+let lastKmh = -1, lastScore = -1, lastGear = -1, lastLapSecond = -1;  // avoid needless DOM writes
+let runId = 1;                                                       // identifies the current run
 
 /* =========================================================================
    SHARED MATERIALS / GEOMETRY — built once, reused everywhere
@@ -538,6 +692,7 @@ function init() {
   createRoad();
   createCar();
   createTraffic();
+  createFinishLine();
   createSpeedLines();
 
   updateWorld();          // place everything before the first frame
@@ -879,7 +1034,7 @@ function createCar() {
    TRAFFIC — slower cars to weave through; the game's only fail state
    ========================================================================= */
 function createTraffic() {
-  for (let i = 0; i < CONFIG.trafficCount; i++) {
+  for (let i = 0; i < CONFIG.trafficMax; i++) {
     const color = TRAFFIC_COLORS[i % TRAFFIC_COLORS.length];
     const built = buildCar(color, true);
     built.group.visible = false;      // the road stays empty behind the title
@@ -899,42 +1054,61 @@ function createTraffic() {
   }
 }
 
+/* -------------------------------------------------------------------------
+   Difficulty: every traffic parameter is a blend between an easy end and a
+   hard end, driven by `game.difficulty`.
+   ------------------------------------------------------------------------- */
+function difficultyMix(easy, hard) {
+  return THREE.MathUtils.lerp(easy, hard, game.difficulty);
+}
+
+/** How many of the pooled cars are on the road right now. */
+function activeTrafficCount() {
+  return Math.round(difficultyMix(CONFIG.trafficStart, CONFIG.trafficMax));
+}
+
 /** Places a traffic car somewhere ahead, never sealing off every lane. */
 function respawnTraffic(entry, initial = false) {
-  const minAhead = initial ? 90 : CONFIG.spawnMin;
+  const near = difficultyMix(CONFIG.spawnEasy[0], CONFIG.spawnHard[0]);
+  const far  = difficultyMix(CONFIG.spawnEasy[1], CONFIG.spawnHard[1]);
+  const minAhead = initial ? 90 : near;
+
+  const slow = difficultyMix(CONFIG.trafficSpeedEasy[0], CONFIG.trafficSpeedHard[0]);
+  const fast = difficultyMix(CONFIG.trafficSpeedEasy[1], CONFIG.trafficSpeedHard[1]);
 
   for (let attempt = 0; attempt < 14; attempt++) {
-    const d = game.distance + rand(minAhead, CONFIG.spawnMax);
+    const d = game.distance + rand(minAhead, far);
     const lane = Math.floor(Math.random() * CONFIG.laneCount);
     if (isSpotFree(entry, d, lane)) {
       entry.roadDist = d;
       entry.lane = lane;
       entry.laneX = LANE_X[lane] + rand(-0.5, 0.5);
-      entry.speed = rand(CONFIG.trafficMinSpeed, CONFIG.trafficMaxSpeed);
+      entry.speed = rand(slow, fast);
       entry.scored = false;
       return;
     }
   }
 
   // Fallback: park it far away and try again next frame
-  entry.roadDist = game.distance + CONFIG.spawnMax;
+  entry.roadDist = game.distance + far;
   entry.lane = 1;
   entry.laneX = LANE_X[1];
-  entry.speed = CONFIG.trafficMaxSpeed;
+  entry.speed = fast;
   entry.scored = false;
 }
 
 /**
  * A spot is free if no car already sits there, and taking it still leaves at
  * least one lane open across that stretch of road — so there is always a way
- * through.
+ * through, however hard it gets.
  */
 function isSpotFree(self, d, lane) {
+  const gap = difficultyMix(CONFIG.spawnGapEasy, CONFIG.spawnGapHard);
   const blocked = new Set([lane]);
 
   for (const other of traffic) {
-    if (other === self) continue;
-    if (Math.abs(other.roadDist - d) < 45) {
+    if (other === self || !other.group.visible) continue;
+    if (Math.abs(other.roadDist - d) < gap) {
       if (other.lane === lane) return false;
       blocked.add(other.lane);
     }
@@ -943,20 +1117,32 @@ function isSpotFree(self, d, lane) {
 }
 
 function updateTraffic(dt) {
-  for (const t of traffic) {
+  const active = game.state === 'title' ? 0 : activeTrafficCount();
+  const far = difficultyMix(CONFIG.spawnEasy[1], CONFIG.spawnHard[1]);
+
+  traffic.forEach((t, i) => {
+    // Cars past the current difficulty's headcount sit out, parked ahead so
+    // they drop straight into play when the road gets busier.
+    const onRoad = i < active;
+    if (t.group.visible !== onRoad) {
+      t.group.visible = onRoad;
+      if (onRoad) respawnTraffic(t);
+    }
+    if (!onRoad) return;
+
     t.roadDist += t.speed * dt;
 
     const rel = t.roadDist - game.distance;
 
     // Recycle once passed (or left far behind if the player reversed)
-    if (rel < -70 || rel > CONFIG.spawnMax + 260) {
+    if (rel < -70 || rel > far + 300) {
       respawnTraffic(t);
-      continue;
+      return;
     }
 
     // Spin the wheels at their own speed
     for (const wheel of t.wheels) wheel.rotation.x -= (t.speed * dt) / CONFIG.wheelRadius;
-  }
+  });
 }
 
 /* -------------------------------------------------------------------------
@@ -966,6 +1152,8 @@ function checkCollisions() {
   if (game.state !== 'driving') return;
 
   for (const t of traffic) {
+    if (!t.group.visible) continue;
+
     const dz = t.roadDist - game.distance;
     if (Math.abs(dz) > 12) continue;
 
@@ -985,6 +1173,140 @@ function checkCollisions() {
       flashNearMiss();
     }
   }
+}
+
+/* =========================================================================
+   START / FINISH LINE
+   =========================================================================
+   One gantry does both jobs: it's armed as the finish line a few seconds
+   before the lap timer runs out, and once you cross it, it just keeps
+   receding as the start line of the lap that follows.
+   ========================================================================= */
+const finishLine = { group: null, roadDist: 0, armed: false };
+
+/** Black-and-white checkerboard, drawn to a canvas. */
+function makeCheckerTexture(squares, size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const cell = size / squares;
+
+  for (let y = 0; y < squares; y++) {
+    for (let x = 0; x < squares; x++) {
+      ctx.fillStyle = (x + y) % 2 ? '#14181c' : '#f2f4f0';
+      ctx.fillRect(x * cell, y * cell, cell, cell);
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** The overhead banner: checkered edges with FINISH across the middle. */
+function makeBannerTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#14181c';
+  ctx.fillRect(0, 0, 512, 128);
+
+  const cell = 16;
+  for (let x = 0; x < 512 / cell; x++) {
+    for (const y of [0, 128 - cell]) {
+      ctx.fillStyle = (x + (y ? 1 : 0)) % 2 ? '#14181c' : '#f2f4f0';
+      ctx.fillRect(x * cell, y, cell, cell);
+    }
+  }
+
+  ctx.fillStyle = '#f2f4f0';
+  ctx.font = 'bold 62px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('FINISH', 256, 66);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function createFinishLine() {
+  const group = new THREE.Group();
+  const span = ROAD_WIDTH + SHOULDER * 2;
+
+  // Checkered band painted across the asphalt
+  const bandTex = makeCheckerTexture(2, 64);
+  bandTex.wrapS = bandTex.wrapT = THREE.RepeatWrapping;
+  bandTex.repeat.set(14, 1);
+
+  const band = new THREE.Mesh(
+    new THREE.PlaneGeometry(span, 2.6),
+    new THREE.MeshStandardMaterial({ map: bandTex, roughness: 0.8 })
+  );
+  band.rotation.x = -Math.PI / 2;
+  band.position.y = 0.02;
+  group.add(band);
+
+  // Gantry legs
+  const postMat = new THREE.MeshStandardMaterial({ color: 0xdfe3e8, roughness: 0.45, metalness: 0.35 });
+  const postGeo = new THREE.BoxGeometry(0.34, 6.4, 0.34);
+  for (const side of [-1, 1]) {
+    const post = new THREE.Mesh(postGeo, postMat);
+    post.position.set(side * (ROAD_HALF + SHOULDER + 0.7), 3.2, 0);
+    post.castShadow = true;
+    group.add(post);
+  }
+
+  // Banner across the top
+  const banner = new THREE.Mesh(
+    new THREE.BoxGeometry(span + 2.6, 1.6, 0.35),
+    new THREE.MeshStandardMaterial({ map: makeBannerTexture(), roughness: 0.6 })
+  );
+  banner.position.y = 6.4;
+  banner.castShadow = true;
+  group.add(banner);
+
+  group.visible = false;
+  worldGroup.add(group);
+  finishLine.group = group;
+}
+
+/* =========================================================================
+   LAPS — one minute each, with the difficulty climbing throughout
+   ========================================================================= */
+function updateLaps(dt) {
+  if (game.state !== 'driving') return;
+
+  game.elapsed += dt;
+  game.lapTime += dt;
+
+  // Rises toward 1 and never stops rising, so the road keeps getting worse
+  game.difficulty = 1 - Math.exp(-game.elapsed / CONFIG.difficultyRamp);
+
+  const remaining = CONFIG.lapDuration - game.lapTime;
+
+  // Drop the line onto the road where the car will actually be when the lap
+  // timer runs out. Committing a few seconds early means it approaches from
+  // the distance instead of appearing on top of you.
+  if (!finishLine.armed && remaining <= CONFIG.finishPreview) {
+    finishLine.armed = true;
+    finishLine.roadDist = game.distance +
+      Math.max(70, physics.currentSpeed * Math.max(remaining, 0));
+  }
+
+  // The line is what actually ends the lap, so crawling never skips one
+  if (finishLine.armed && game.distance >= finishLine.roadDist) completeLap();
+}
+
+function completeLap() {
+  finishLine.armed = false;      // the same gantry is now the next start line
+  game.lap += 1;
+  game.lapTime = 0;
+  game.score += CONFIG.lapBonus * (game.lap - 1);
+
+  flashBanner('LAP ' + game.lap + '  ·  +' + (CONFIG.lapBonus * (game.lap - 1)));
 }
 
 /* =========================================================================
@@ -1099,7 +1421,8 @@ function updatePhysics(dt) {
   // --- Advance down the road and score it ---
   game.distance += forward;
   if (game.state === 'driving' && forward > 0) {
-    game.score += forward * CONFIG.pointsPerUnit * (1 + speedRatio);
+    // Faster is worth more, and so is surviving into the harder traffic
+    game.score += forward * CONFIG.pointsPerUnit * (1 + speedRatio) * (1 + game.difficulty);
   }
 
   // --- Apply to the visible car ---
@@ -1152,7 +1475,22 @@ function updateWorld() {
     segment.getObjectByName('props').traverse(o => { if (o.isMesh) o.castShadow = rel < 90; });
   }
 
+  // The start/finish gantry rides the curve exactly like the traffic does
+  if (finishLine.group) {
+    const rel = finishLine.roadDist - p;
+    const visible = game.state !== 'title' && rel > -30 && rel < 620;
+    finishLine.group.visible = visible;
+
+    if (visible) {
+      const slope = Math.atan(curveSlope(finishLine.roadDist));
+      finishLine.group.position.set(curveX(finishLine.roadDist) - originX, 0, -rel);
+      finishLine.group.rotation.y = -slope;
+    }
+  }
+
   for (const t of traffic) {
+    if (!t.group.visible) continue;
+
     const rel = t.roadDist - p;
     const d = t.roadDist;
     const slope = Math.atan(curveSlope(d));
@@ -1572,20 +1910,51 @@ function wakeAudio() {
    GAME STATE — start, crash, restart, scoring
    ========================================================================= */
 function startGame() {
-  game.state = 'driving';
-  game.score = 0;
-
-  physics.x = LANE_X[1];
-  physics.targetLane = 1;
-
-  for (const t of traffic) {
-    respawnTraffic(t, true);
-    t.group.visible = true;
-  }
-
+  resetRun();
   stopMusic();
   hideHint();          // fades the title card now, the controls hint shortly after
+}
+
+/** Wipes the score, the lap counter and the difficulty — a brand new run. */
+function resetRun() {
+  runId += 1;
+  game.state = 'driving';
+  game.score = 0;
+  game.lap = 1;
+  game.lapTime = 0;
+  game.elapsed = 0;
+  game.difficulty = 0;
+
+  resumeDriving();
+}
+
+/** Puts the car back on the road, keeping whatever run state is in place. */
+function resumeDriving() {
+  game.state = 'driving';
+  game.timeScale = 1;
+  game.shake = 0;
+
+  physics.currentSpeed = 0;
+  physics.heading = 0;
+  physics.x = LANE_X[1];
+  physics.targetLane = 1;
+  physics.lateralVel = 0;
+
+  camLateral = 0;
+  car.rotation.set(0, 0, 0);
+
+  // The gantry becomes the start line for the road ahead
+  finishLine.armed = false;
+  finishLine.roadDist = game.distance + 70;
+
+  for (const t of traffic) respawnTraffic(t, true);
+
+  ui.gameover.classList.remove('show');
+  ui.vignette.classList.remove('show');
+  ui.newBest.style.display = 'none';
+
   updateWorld();
+  updateScoreHUD(true);
 }
 
 function crash() {
@@ -1601,31 +1970,19 @@ function crash() {
   playCrashSound();
 }
 
-function restart() {
-  physics.currentSpeed = 0;
-  physics.heading = 0;
-  physics.x = LANE_X[1];
-  physics.targetLane = 1;
-  physics.lateralVel = 0;
-
+/** SPACE on the game-over screen: pick the run back up where it left off. */
+function continueRun() {
   // game.distance deliberately keeps running: the road segments and traffic
-  // are all positioned relative to it, and every run gets a different corner.
-  game.score = 0;
-  game.timeScale = 1;
-  game.shake = 0;
-  game.state = 'driving';
-
-  camLateral = 0;
-  car.rotation.set(0, 0, 0);
-
+  // are positioned relative to it, and the road ahead is fresh either way.
   for (const segment of roadSegments) randomizeSegment(segment);
-  for (const t of traffic) respawnTraffic(t, true);
+  resumeDriving();
+  flashBanner('LAP ' + game.lap);
+}
 
-  ui.gameover.classList.remove('show');
-  ui.vignette.classList.remove('show');
-  ui.newBest.style.display = 'none';
-
-  updateWorld();
+/** R on the game-over screen: throw the run away and start from scratch. */
+function restart() {
+  for (const segment of roadSegments) randomizeSegment(segment);
+  resetRun();
 }
 
 function updateCrashSequence(dt) {
@@ -1639,19 +1996,20 @@ function updateCrashSequence(dt) {
     game.state = 'over';
 
     const score = Math.floor(game.score);
-    const isBest = score > game.best;
-    if (isBest) {
-      game.best = score;
-      localStorage.setItem('endlessDriveBest', String(score));
-    }
+    const wasBest = game.best;
 
-    ui.finalScore.textContent = 'Score ' + score.toLocaleString();
-    ui.finalBest.textContent  = 'Best ' + game.best.toLocaleString();
-    ui.newBest.style.display  = isBest ? 'block' : 'none';
+    recordRun();
+    renderLeaderboard();
+
+    const laps = game.lap - 1;
+    ui.runSummary.textContent =
+      'Score ' + score.toLocaleString() + ' · ' + laps + (laps === 1 ? ' lap' : ' laps') + ' completed';
+    ui.newBest.style.display = score > wasBest ? 'block' : 'none';
+
     ui.gameover.classList.add('show');
     ui.vignette.classList.remove('show');
 
-    // Don't let the SPACE that was held during the crash restart instantly
+    // Don't let the SPACE that was held during the crash continue instantly
     game.awaitingRestartRelease = keys.accelerate;
     updateScoreHUD(true);
   }
@@ -1687,13 +2045,106 @@ function updateScoreHUD(force) {
     ui.score.textContent = score.toLocaleString();
     ui.best.textContent = 'Best ' + game.best.toLocaleString();
   }
+
+  // Lap number and countdown, refreshed only when the displayed second moves
+  const remaining = Math.max(0, CONFIG.lapDuration - game.lapTime);
+  const second = Math.ceil(remaining);
+  if (second !== lastLapSecond || force) {
+    lastLapSecond = second;
+    ui.lapNumber.textContent = 'Lap ' + game.lap;
+    ui.lapTimer.textContent = finishLine.armed
+      ? 'FINISH'
+      : Math.floor(second / 60) + ':' + String(second % 60).padStart(2, '0');
+    ui.lapTimer.classList.toggle('closing', finishLine.armed || second <= 10);
+  }
+}
+
+/** Restarts a CSS animation by removing the class and forcing a reflow. */
+function replayAnimation(element, className) {
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
 }
 
 function flashNearMiss() {
   ui.nearmiss.textContent = 'NEAR MISS +' + CONFIG.nearMissBonus;
-  ui.nearmiss.classList.remove('show');
-  void ui.nearmiss.offsetWidth;      // restart the CSS animation
-  ui.nearmiss.classList.add('show');
+  replayAnimation(ui.nearmiss, 'show');
+}
+
+function flashBanner(text) {
+  ui.lapBanner.textContent = text;
+  replayAnimation(ui.lapBanner, 'show');
+}
+
+/* -------------------------------------------------------------------------
+   Leaderboard rendering and persistence
+   ------------------------------------------------------------------------- */
+function recordRun() {
+  const score = Math.floor(game.score);
+  const laps = game.lap - 1;                 // laps actually completed
+
+  const existing = leaderboard.find(entry => entry.id === runId);
+  if (existing) {
+    existing.score = score;                  // same run, continued — update it
+    existing.laps = laps;
+    existing.when = Date.now();
+  } else {
+    leaderboard.push({ id: runId, score, laps, when: Date.now() });
+  }
+
+  leaderboard.sort((a, b) => b.score - a.score);
+  leaderboard = leaderboard.slice(0, LEADERBOARD_SIZE);
+
+  game.best = Math.max(game.best, score);
+
+  try {
+    localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard));
+    localStorage.setItem('endlessDriveBest', String(game.best));
+  } catch (e) { /* storage full or blocked — the board just won't persist */ }
+}
+
+function renderLeaderboard() {
+  ui.board.innerHTML = '';
+
+  if (leaderboard.length === 0) {
+    const row = document.createElement('tr');
+    row.className = 'empty';
+    const cell = document.createElement('td');
+    cell.colSpan = 4;
+    cell.textContent = 'No runs yet';
+    row.appendChild(cell);
+    ui.board.appendChild(row);
+    return;
+  }
+
+  leaderboard.forEach((entry, i) => {
+    const row = document.createElement('tr');
+    if (entry.id === runId) row.className = 'current';
+
+    const cells = [
+      { text: String(i + 1), cls: 'rank' },
+      { text: entry.score.toLocaleString(), cls: '' },
+      { text: String(entry.laps), cls: '' },
+      { text: timeAgo(entry.when), cls: 'when' },
+    ];
+
+    for (const spec of cells) {
+      const cell = document.createElement('td');
+      cell.textContent = spec.text;
+      if (spec.cls) cell.className = spec.cls;
+      row.appendChild(cell);
+    }
+    ui.board.appendChild(row);
+  });
+}
+
+function timeAgo(when) {
+  const minutes = Math.floor((Date.now() - when) / 60000);
+  if (minutes < 1)    return 'just now';
+  if (minutes < 60)   return minutes + 'm ago';
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24)     return hours + 'h ago';
+  return Math.floor(hours / 24) + 'd ago';
 }
 
 /* =========================================================================
@@ -1711,6 +2162,7 @@ function animate() {
   const dt = rawDt * game.timeScale;
 
   if (game.state !== 'over') {
+    updateLaps(dt);
     updatePhysics(dt);
     updateTraffic(dt);
     updateWorld();
@@ -1748,7 +2200,7 @@ function onKeyDown(event) {
   switch (event.code) {
     case 'Space':
       event.preventDefault();
-      if (game.state === 'over' && !game.awaitingRestartRelease) { restart(); break; }
+      if (game.state === 'over' && !game.awaitingRestartRelease) { continueRun(); break; }
       keys.accelerate = true;
       hideHint();
       break;
