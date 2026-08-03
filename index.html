@@ -291,7 +291,7 @@
 
 <div id="title">
   <h1>Hakan's Carpool</h1>
-  <p>Press Space to drive</p>
+  <p id="title-hint">Press any key to start</p>
 </div>
 
 <div id="hint" class="panel">
@@ -332,6 +332,7 @@ const CONFIG = {
   brakeForce:     34,     // deceleration while braking
   reverseAccel:   9,
   maxReverseSpeed: 9,
+  attractSpeed:   17,     // gentle cruise behind the title screen
 
   // --- Lane-change steering ---
   // A and D pick a lane; the car slides across on its own.
@@ -404,7 +405,7 @@ const physics = {
 
 // Game state
 const game = {
-  state:      'driving',   // 'driving' | 'crashing' | 'over'
+  state:      'title',     // 'title' | 'driving' | 'crashing' | 'over'
   distance:   0,           // road distance travelled (drives the whole world)
   score:      0,
   best:       Number(localStorage.getItem('endlessDriveBest') || 0),
@@ -436,6 +437,7 @@ const ui = {
   finalBest:   document.getElementById('final-best'),
   newBest:     document.getElementById('new-best'),
   title:       document.getElementById('title'),
+  titleHint:   document.getElementById('title-hint'),
   hint:        document.getElementById('hint'),
   mutedTag:    document.getElementById('muted-tag'),
 };
@@ -544,6 +546,22 @@ function init() {
   window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
+
+  // A click counts as a gesture too, and only wakes the music — it never
+  // starts the game, so you can hear the tune before driving.
+  window.addEventListener('pointerdown', wakeAudio);
+
+  // If this page is already allowed to make noise, start the tune right away.
+  initAudio();
+  if (audio) {
+    audio.ctx.resume().then(() => {
+      if (audio.ctx.state === 'running' && !musicStarted && game.state === 'title') {
+        musicStarted = true;
+        startMusic();
+        ui.titleHint.textContent = 'Press any key to drive';
+      }
+    }).catch(() => { /* blocked until the first gesture — expected */ });
+  }
 }
 
 /* -------------------------------------------------------------------------
@@ -864,6 +882,7 @@ function createTraffic() {
   for (let i = 0; i < CONFIG.trafficCount; i++) {
     const color = TRAFFIC_COLORS[i % TRAFFIC_COLORS.length];
     const built = buildCar(color, true);
+    built.group.visible = false;      // the road stays empty behind the title
     worldGroup.add(built.group);
 
     const entry = {
@@ -1026,7 +1045,10 @@ function updatePhysics(dt) {
   const p = physics;
 
   // --- Longitudinal: throttle / brake / friction ---
-  if (game.state === 'driving' && keys.accelerate) {
+  if (game.state === 'title') {
+    // Attract mode: cruise gently past the title card
+    p.currentSpeed = THREE.MathUtils.lerp(p.currentSpeed, CONFIG.attractSpeed, 1 - Math.exp(-1.1 * dt));
+  } else if (game.state === 'driving' && keys.accelerate) {
     p.currentSpeed += CONFIG.acceleration * dt;
   } else if (game.state === 'driving' && keys.brake) {
     // Brake hard down to a stop, then crawl backwards
@@ -1240,8 +1262,15 @@ function updateAudio() {
   );
 
   const load = keys.accelerate ? 1.25 : 0.8;
-  const target = (muted || game.state === 'over') ? 0 : (0.03 + ratio * 0.07) * load;
-  audio.master.gain.setTargetAtTime(target, t, 0.1);
+  const silent = muted || game.state === 'over' || game.state === 'title';
+  audio.master.gain.setTargetAtTime(silent ? 0 : (0.03 + ratio * 0.07) * load, t, 0.1);
+
+  // Mute the title tune too — but only on change, so the fade-in survives
+  if (musicState && !musicState.stopping && musicState.muted !== muted) {
+    musicState.muted = muted;
+    musicState.bus.gain.cancelScheduledValues(t);
+    musicState.bus.gain.setTargetAtTime(muted ? 0.0001 : MUSIC.volume, t, 0.12);
+  }
 }
 
 function playCrashSound() {
@@ -1274,8 +1303,291 @@ function playCrashSound() {
 }
 
 /* =========================================================================
-   GAME STATE — crash, restart, scoring
+   TITLE MUSIC — a Rob Hubbard style C64 tune, synthesized from scratch
+   =========================================================================
+   The SID tricks Hubbard leaned on, rebuilt from WebAudio primitives:
+   a square-wave bass hammering octave-jumping eighths, a chord "arpeggio"
+   cycled at 50 Hz (one note per PAL frame — the SID's way of faking three
+   notes out of one voice), a vibrato'd lead with a slapback echo standing
+   in for a fourth voice, and noise-burst drums.
    ========================================================================= */
+const MUSIC = {
+  bpm:        138,
+  volume:     0.22,
+  stepsPerBar: 16,        // sixteenth notes
+  arpRate:    0.02,       // 50 Hz — one arpeggio note per PAL frame
+};
+
+// i – VI – VII – i  /  iv – VI – VII – V, in A minor
+const CHORDS = [
+  { root: 45, minor: true  },   // Am
+  { root: 41, minor: false },   // F
+  { root: 43, minor: false },   // G
+  { root: 45, minor: true  },   // Am
+  { root: 38, minor: true  },   // Dm
+  { root: 41, minor: false },   // F
+  { root: 43, minor: false },   // G
+  { root: 40, minor: false },   // E — major, for the harmonic-minor cadence
+];
+
+// Bass offsets from the chord root, one per eighth note
+const BASS = [0, 0, 12, 0, 7, 0, 12, 0];
+
+// Lead melody per bar: [step, MIDI note, length in steps]
+const LEAD = [
+  [[0, 69, 2], [2, 72, 2], [4, 76, 3], [8, 74, 2], [10, 72, 2], [12, 69, 4]],
+  [[0, 72, 2], [4, 77, 3], [8, 76, 2], [10, 72, 2], [12, 69, 2], [14, 72, 2]],
+  [[0, 71, 2], [2, 74, 2], [4, 79, 3], [8, 78, 2], [10, 74, 2], [12, 71, 4]],
+  [[0, 69, 3], [4, 76, 2], [6, 74, 2], [8, 72, 3], [12, 69, 4]],
+  [[0, 74, 2], [2, 77, 2], [4, 81, 3], [8, 79, 2], [10, 77, 2], [12, 74, 4]],
+  [[0, 72, 2], [4, 77, 3], [8, 81, 2], [10, 77, 2], [12, 72, 4]],
+  [[0, 71, 2], [2, 74, 2], [4, 79, 3], [8, 83, 2], [10, 79, 2], [12, 74, 4]],
+  [[0, 68, 3], [4, 71, 2], [6, 68, 2], [8, 64, 6]],
+];
+
+let musicState = null;
+let musicStarted = false;
+
+function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+function stepDuration() { return 60 / MUSIC.bpm / (MUSIC.stepsPerBar / 4); }
+
+/** Root, third and fifth, two octaves up — the notes the arpeggio cycles. */
+function chordTones(chord) {
+  return [chord.root + 24, chord.root + 24 + (chord.minor ? 3 : 4), chord.root + 31];
+}
+
+function startMusic() {
+  if (!audio || musicState) return;
+  const ctx = audio.ctx;
+  const now = ctx.currentTime;
+
+  const bus = ctx.createGain();
+  bus.gain.setValueAtTime(0.0001, now);
+  bus.gain.exponentialRampToValueAtTime(MUSIC.volume, now + 1.4);
+  bus.connect(ctx.destination);
+
+  // Bass voice — filtered to keep it thick rather than buzzy
+  const bassBus = ctx.createBiquadFilter();
+  bassBus.type = 'lowpass';
+  bassBus.frequency.value = 900;
+  bassBus.connect(bus);
+
+  // Lead voice, with the slapback echo every C64 musician used to fake a
+  // voice they didn't have
+  const leadBus = ctx.createGain();
+  const delay = ctx.createDelay(1.0);
+  delay.delayTime.value = stepDuration() * 1.5;
+  const feedback = ctx.createGain();
+  feedback.gain.value = 0.3;
+  const echoLevel = ctx.createGain();
+  echoLevel.gain.value = 0.35;
+  delay.connect(feedback);
+  feedback.connect(delay);
+  delay.connect(echoLevel);
+  echoLevel.connect(bus);
+  leadBus.connect(bus);
+  leadBus.connect(delay);
+
+  // One vibrato LFO, fanned out to every lead note as it's created
+  const lfo = ctx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 5.5;
+  const lfoDepth = ctx.createGain();
+  lfoDepth.gain.value = 16;          // cents
+  lfo.connect(lfoDepth);
+  lfo.start();
+
+  // The arpeggio runs as one continuous oscillator; only its frequency is
+  // rescheduled, which is exactly how the SID did it (and avoids clicks).
+  const arpGain = ctx.createGain();
+  arpGain.gain.value = 0.09;
+  arpGain.connect(bus);
+  const arpOsc = ctx.createOscillator();
+  arpOsc.type = 'square';
+  arpOsc.connect(arpGain);
+  arpOsc.start();
+
+  // Drum noise, generated once
+  const noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.5), ctx.sampleRate);
+  const data = noise.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+
+  musicState = {
+    bus, bassBus, leadBus, lfoDepth, lfo, arpOsc, noise,
+    step: 0,
+    nextTime: now + 0.1,
+    stopping: false,
+    muted: false,
+    timer: setInterval(scheduleMusic, 25),
+  };
+}
+
+/** Lookahead scheduler: setInterval decides *what*, WebAudio decides *when*. */
+function scheduleMusic() {
+  if (!musicState || musicState.stopping) return;
+
+  const ctx = audio.ctx;
+  const dur = stepDuration();
+  const totalSteps = CHORDS.length * MUSIC.stepsPerBar;
+
+  while (musicState.nextTime < ctx.currentTime + 0.15) {
+    scheduleStep(musicState.step, musicState.nextTime, dur);
+    musicState.nextTime += dur;
+    musicState.step = (musicState.step + 1) % totalSteps;
+  }
+}
+
+function scheduleStep(index, time, dur) {
+  const bar   = Math.floor(index / MUSIC.stepsPerBar);
+  const step  = index % MUSIC.stepsPerBar;
+  const chord = CHORDS[bar];
+
+  // --- Bass: octave-jumping eighths ---
+  if (step % 2 === 0) {
+    playTone(time, midiToFreq(chord.root + BASS[step / 2]), dur * 0.85,
+             'square', 0.5, musicState.bassBus);
+  }
+
+  // --- Arpeggio: cycle the chord at 50 Hz ---
+  const tones = chordTones(chord);
+  let n = 0;
+  for (let t = 0; t < dur; t += MUSIC.arpRate) {
+    musicState.arpOsc.frequency.setValueAtTime(midiToFreq(tones[n % tones.length]), time + t);
+    n++;
+  }
+
+  // --- Lead ---
+  for (const [at, note, len] of LEAD[bar]) {
+    if (at === step) {
+      playTone(time, midiToFreq(note), dur * len * 0.9, 'sawtooth', 0.3, musicState.leadBus, true);
+    }
+  }
+
+  // --- Drums ---
+  if (step === 0 || step === 8)  playKick(time);
+  if (step === 4 || step === 12) playNoiseHit(time, 0.14, 0.35, 1200);
+  if (step % 2 === 1)            playNoiseHit(time, 0.03, 0.07, 6000);
+}
+
+function playTone(time, freq, dur, type, vol, dest, vibrato = false) {
+  const ctx = audio.ctx;
+
+  const osc = ctx.createOscillator();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, time);
+  if (vibrato) musicState.lfoDepth.connect(osc.detune);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.exponentialRampToValueAtTime(vol, time + 0.006);   // near-instant attack
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+
+  osc.connect(gain);
+  gain.connect(dest);
+  osc.start(time);
+  osc.stop(time + dur + 0.02);
+}
+
+function playKick(time) {
+  const ctx = audio.ctx;
+
+  const osc = ctx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(140, time);
+  osc.frequency.exponentialRampToValueAtTime(45, time + 0.11);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.55, time);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
+
+  osc.connect(gain);
+  gain.connect(musicState.bus);
+  osc.start(time);
+  osc.stop(time + 0.18);
+}
+
+/** Snare and hi-hat are the same burst with different length and cutoff. */
+function playNoiseHit(time, dur, vol, cutoff) {
+  const ctx = audio.ctx;
+
+  const src = ctx.createBufferSource();
+  src.buffer = musicState.noise;
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = cutoff;
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(vol, time);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(musicState.bus);
+  src.start(time);
+  src.stop(time + dur + 0.02);
+}
+
+function stopMusic() {
+  if (!musicState) return;
+
+  const ctx = audio.ctx;
+  const s = musicState;
+  musicState = null;                 // stops the scheduler immediately
+
+  s.stopping = true;
+  clearInterval(s.timer);
+  s.bus.gain.cancelScheduledValues(ctx.currentTime);
+  s.bus.gain.setValueAtTime(Math.max(s.bus.gain.value, 0.0001), ctx.currentTime);
+  s.bus.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.7);
+
+  setTimeout(() => {
+    try { s.arpOsc.stop(); s.lfo.stop(); s.bus.disconnect(); } catch (e) { /* already gone */ }
+  }, 900);
+}
+
+/**
+ * Unlocks WebAudio and starts the tune. Browsers only allow audio to begin
+ * from a user gesture, so this is called from the first keypress or click.
+ * Returns true if this call is what woke the music.
+ */
+function wakeAudio() {
+  initAudio();
+  if (!audio || musicStarted || game.state !== 'title') return false;
+
+  musicStarted = true;               // claim it now; the tune follows async
+  const begin = () => {
+    if (game.state !== 'title') return;
+    startMusic();
+    ui.titleHint.textContent = 'Press any key to drive';
+  };
+
+  if (audio.ctx.state === 'suspended') audio.ctx.resume().then(begin).catch(() => {});
+  else begin();
+
+  return true;
+}
+
+/* =========================================================================
+   GAME STATE — start, crash, restart, scoring
+   ========================================================================= */
+function startGame() {
+  game.state = 'driving';
+  game.score = 0;
+
+  physics.x = LANE_X[1];
+  physics.targetLane = 1;
+
+  for (const t of traffic) {
+    respawnTraffic(t, true);
+    t.group.visible = true;
+  }
+
+  stopMusic();
+  hideHint();          // fades the title card now, the controls hint shortly after
+  updateWorld();
+}
+
 function crash() {
   if (game.state !== 'driving') return;
 
@@ -1421,6 +1733,14 @@ function changeLane(direction) {
 }
 
 function onKeyDown(event) {
+  // --- Title screen: first press wakes the tune, the next one drives ---
+  if (game.state === 'title') {
+    if (event.code === 'Space') event.preventDefault();
+    if (wakeAudio()) return;      // this press started the music
+    startGame();
+    return;
+  }
+
   // WebAudio may only start from a user gesture
   initAudio();
   if (audio && audio.ctx.state === 'suspended') audio.ctx.resume();

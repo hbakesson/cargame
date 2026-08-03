@@ -41,12 +41,23 @@ Firefox 108+, Safari 16.4+.
 | --- | --- |
 | `SPACE` | Accelerate |
 | `M` (or `↓`) | Brake, then reverse |
-| `A` (or `←`) | Steer left |
-| `D` (or `→`) | Steer right |
+| `A` (or `←`) | Move one lane left |
+| `D` (or `→`) | Move one lane right |
 | `N` | Mute / unmute |
 | `SPACE` / `R` | Restart after a crash |
 
+Steering is lane-based: one tap moves you one lane and the car slides across
+on its own. Tap twice quickly to cross two lanes. Holding the key does nothing
+extra, and a stopped car can't change lanes at all.
+
 Release everything and friction brings you to a stop on its own.
+
+### Starting up
+
+The title screen cruises along on its own while a C64-style tune plays. Because
+browsers block audio until you interact with the page, the **first** keypress
+wakes the music and the **next** one starts the drive — or click anywhere to
+start the tune without leaving the title screen.
 
 ---
 
@@ -121,15 +132,13 @@ Arcade, not simulation. Everything is delta-time driven, with `dt` clamped to
 - **Longitudinal** — throttle adds `acceleration`; coasting subtracts constant
   rolling `friction` plus `airDrag × speed`; braking subtracts `brakeForce` down
   through zero into a slow reverse.
-- **Steering** — input builds a `heading` angle rather than moving the car
-  directly. Authority is gated by a `smoothstep` on speed, so a stopped car
-  cannot turn at all.
-- **Lateral inertia** — heading sets a *target* sideways velocity that the car
-  eases into at `gripLag`. That's what gives lane changes weight instead of
-  making them feel like dragging a slider.
-- **Clamping** — `x` is bounded to the lanes plus half a shoulder; hitting the
-  limit also bleeds off heading so the car straightens rather than grinding
-  along the edge.
+- **Steering** — A/D set `targetLane`; the car eases toward that lane center at
+  `laneChangeRate`, scaled by a `smoothstep` on speed so a stopped car stays
+  put. Yaw, body roll and the front-wheel angle are all derived from the
+  *measured* sideways slide, so the car visibly leans into a change without any
+  of it being driven by the key state.
+- **Clamping** — `x` is bounded to the lanes plus half a shoulder, which only
+  ever catches the extra drift a hard corner adds.
 
 ### Traffic
 
@@ -154,6 +163,25 @@ is always a way through.
 Audio can only start from a user gesture, so it initializes on your first
 keypress.
 
+### The title tune
+
+The C64 chiptune on the title screen is synthesized from scratch — no samples,
+no audio files. It's built from the tricks Rob Hubbard used on the SID:
+
+- A square-wave bass hammering octave-jumping eighth notes
+- A chord **arpeggio cycled at 50 Hz** — one note per PAL frame, the SID's way
+  of faking three simultaneous notes out of a single voice. It runs as one
+  continuous oscillator whose frequency is rescheduled, exactly like the
+  original, which also means it never clicks between steps.
+- A vibrato'd sawtooth lead through a slapback echo, standing in for a fourth
+  voice nobody had
+- Noise-burst drums (kick, snare, hat)
+
+Eight bars in A minor, `i – VI – VII – i / iv – VI – VII – V`, at 138 BPM.
+A lookahead scheduler (`setInterval` decides *what*, WebAudio decides *when*)
+keeps it in time regardless of frame rate. Edit `CHORDS`, `BASS` and `LEAD` to
+write your own.
+
 ---
 
 ## Tuning
@@ -170,13 +198,11 @@ Every number worth touching is in the `CONFIG` object at the top of the module.
 | `airDrag` | `0.16` | Extra deceleration proportional to speed |
 | `brakeForce` | `34` | Braking strength |
 | `maxReverseSpeed` | `9` | Reverse speed cap |
-| `steerRate` | `3.9` | How fast heading builds — raise for twitchier turns |
-| `steerReturn` | `4.4` | How fast the car self-centers |
-| `maxHeading` | `0.62` | Sharpest angle the car can hold, in radians |
-| `steerMinSpeed` | `0.03` | Speed fraction below which steering barely bites |
-| `steerHighSpeedFalloff` | `0` | Raise toward `0.45` to calm the car at top speed |
-| `gripLag` | `11` | Lateral response — lower slides more, higher snaps |
-| `curveDrift` | `1.0` | How hard corners throw you outward |
+| `laneChangeRate` | `6.5` | How briskly the car crosses to the next lane |
+| `laneChangeMinSpeed` | `0.12` | Speed fraction needed for a full-rate lane change |
+| `maxHeading` | `0.5` | Visual yaw cap while crossing, in radians |
+| `curveDrift` | `0.35` | How hard corners push you wide within your lane |
+| `attractSpeed` | `17` | Cruise speed behind the title screen |
 
 ### World and difficulty
 
@@ -188,7 +214,7 @@ Every number worth touching is in the `CONFIG` object at the top of the module.
 | `trafficMinSpeed` / `trafficMaxSpeed` | `13` / `34` | Slower traffic means bigger closing speeds |
 | `spawnMin` / `spawnMax` | `170` / `640` | How far ahead traffic appears |
 | `pointsPerUnit` | `0.55` | Base scoring rate |
-| `nearMissDist` / `nearMissBonus` | `3.4` / `75` | Near-miss window and payout |
+| `nearMissDist` / `nearMissBonus` | `4.6` / `75` | Near-miss window and payout |
 
 ### Camera and look
 
@@ -223,7 +249,9 @@ All in `index.html`, in roughly this order:
 | `updateTraffic()` / `checkCollisions()` | Traffic motion, crashes, near misses |
 | `updateCamera()` | Chase camera, lateral lag, shake, FOV stretch |
 | `initAudio()` / `updateAudio()` | The WebAudio engine |
-| `crash()` / `restart()` / `updateCrashSequence()` | Game state machine |
+| `startMusic()` / `scheduleMusic()` / `scheduleStep()` | The title chiptune and its scheduler |
+| `wakeAudio()` | Unlocks audio from the first gesture |
+| `startGame()` / `crash()` / `restart()` / `updateCrashSequence()` | Game state machine |
 | `animate()` | The `requestAnimationFrame` loop |
 
 ---
