@@ -4,8 +4,9 @@ An endless highway driving game built with [Three.js](https://threejs.org/). One
 self-contained HTML file — no build step, no bundler, no game engine, no physics
 library.
 
-Weave through traffic, bank into the corners, and see how far you get before you
-clip someone.
+Weave through traffic, bank into the corners, and see how many one-minute laps
+you can string together before you clip someone. The road gets busier and the
+traffic gets slower the longer you survive.
 
 ---
 
@@ -44,7 +45,8 @@ Firefox 108+, Safari 16.4+.
 | `A` (or `←`) | Move one lane left |
 | `D` (or `→`) | Move one lane right |
 | `N` | Mute / unmute |
-| `SPACE` / `R` | Restart after a crash |
+| `SPACE` | After a crash: continue the run |
+| `R` | After a crash: start over |
 
 Steering is lane-based: one tap moves you one lane and the car slides across
 on its own. Tap twice quickly to cross two lanes. Holding the key does nothing
@@ -182,8 +184,11 @@ Arcade, not simulation. Everything is delta-time driven, with `dt` clamped to
 
 ### Traffic
 
-Nine cars, each with a road distance, a lane, and a speed between 13 and 34
-units/s. When one falls behind it respawns 170–640 units ahead.
+A fixed pool of 14 cars, each with a road distance, a lane and a speed. Only
+the first `activeTrafficCount()` of them are visible; the rest sit out until
+difficulty calls them in, at which point they respawn straight into play. Cars
+that fall behind respawn ahead with fresh parameters, all blended along the
+difficulty ramp by `difficultyMix()`.
 
 `isSpotFree()` enforces the one rule that keeps the game fair: a spawn is
 rejected if it would leave **no** open lane across that stretch of road. There
@@ -276,6 +281,10 @@ Every number worth touching is in the `CONFIG` object at the top of the module.
 
 ## Code map
 
+For the design reasoning behind all of this — why the car never moves, how the
+curve trick works, where to hook new things in — see
+[ARCHITECTURE.md](ARCHITECTURE.md).
+
 All in `index.html`, in roughly this order:
 
 | Function | Responsibility |
@@ -286,7 +295,7 @@ All in `index.html`, in roughly this order:
 | `createRoadSegment()` | One chunk: asphalt, shoulders, edge lines, dashes, prop pool |
 | `randomizeSegment()` | Re-rolls a chunk's scenery — transforms only, no allocation |
 | `buildCar()` | Shared car builder; `simple` mode drops glass and rims for traffic |
-| `createCar()` / `createTraffic()` | The player's car and the nine AI cars |
+| `createCar()` / `createTraffic()` | The player's car and the 14-car traffic pool |
 | `respawnTraffic()` / `isSpotFree()` | Traffic placement, with the always-open-lane rule |
 | `difficultyMix()` / `activeTrafficCount()` | Blend every traffic parameter along the difficulty ramp |
 | `createFinishLine()` / `updateLaps()` / `completeLap()` | The start/finish gantry and lap timing |
@@ -315,11 +324,17 @@ A few things the structure is already set up for:
   inside `createRoadSegment()`, and place them in `randomizeSegment()`.
 - **Power-ups** — traffic already demonstrates the pattern: an object with a
   `roadDist` and a lane, positioned in `updateWorld()` and tested in
-  `checkCollisions()`.
+  `checkCollisions()`. The finish gantry is the same pattern with a single
+  instance.
 - **Day/night** — animate `scene.background`, `scene.fog.color` and the sun's
   colour against `game.distance`.
 - **Tighter or looser corners** — add a third entry to `CURVE`, or scale the
   existing amplitudes.
+- **A different difficulty curve** — everything funnels through `game.difficulty`
+  in `updateLaps()`. Swap the exponential for a per-lap step, or drive it from
+  `game.lap` instead of elapsed time, and the whole game follows.
+- **Your own tune** — `CHORDS`, `BASS` and `LEAD` are plain data; `LEAD` entries
+  are `[step, MIDI note, length in steps]`.
 
 ---
 
@@ -347,6 +362,11 @@ directly to draw calls.
   shipped curve amplitudes stay well within tolerance.
 - Traffic cars drive in a fixed lane and never react to you or to each other —
   they're obstacles, not drivers.
+- Because the finish line is placed from your speed a few seconds out, a big
+  speed change inside that window shifts when you cross it. A lap is "about a
+  minute", not a stopwatch.
+- The leaderboard is per-browser `localStorage` — nothing is shared between
+  machines, and clearing site data wipes it.
 - There's no pause, and no mobile/touch input.
 
 ## License
