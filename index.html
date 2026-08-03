@@ -1312,7 +1312,7 @@ function playCrashSound() {
    in for a fourth voice, and noise-burst drums.
    ========================================================================= */
 const MUSIC = {
-  bpm:        142,
+  bpm:        138,
   volume:     0.22,
   stepsPerBar: 16,        // sixteenth notes
   arpRate:    0.02,       // 50 Hz — one arpeggio note per PAL frame
@@ -1330,35 +1330,19 @@ const CHORDS = [
   { root: 40, minor: false },   // E — major, for the harmonic-minor cadence
 ];
 
-// Bass offsets from the chord root — one per sixteenth, relentless, with the
-// octave jumps that carried nearly every SID action tune.
-const BASS = [0, 0, 12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 7, 0, 12, 0];
+// Bass offsets from the chord root, one per eighth note
+const BASS = [0, 0, 12, 0, 7, 0, 12, 0];
 
-// Lead melody per bar: [step, MIDI note, length in steps].
-// Scalar sixteenth runs over the chord, in the style of the era.
+// Lead melody per bar: [step, MIDI note, length in steps]
 const LEAD = [
-  [[0, 81, 1], [1, 79, 1], [2, 76, 2], [4, 72, 1], [5, 76, 1], [6, 79, 2],
-   [8, 81, 1], [9, 83, 1], [10, 84, 2], [12, 81, 2], [14, 79, 2]],
-
-  [[0, 77, 1], [1, 81, 1], [2, 84, 2], [4, 81, 1], [5, 77, 1], [6, 72, 2],
-   [8, 77, 1], [9, 81, 1], [10, 84, 2], [12, 86, 2], [14, 84, 2]],
-
-  [[0, 79, 1], [1, 83, 1], [2, 86, 2], [4, 83, 1], [5, 79, 1], [6, 74, 2],
-   [8, 79, 1], [9, 83, 1], [10, 86, 2], [12, 88, 2], [14, 86, 2]],
-
-  [[0, 81, 2], [2, 79, 2], [4, 76, 2], [6, 72, 2],
-   [8, 69, 1], [9, 72, 1], [10, 76, 1], [11, 79, 1], [12, 81, 4]],
-
-  [[0, 86, 1], [1, 84, 1], [2, 81, 2], [4, 77, 1], [5, 81, 1], [6, 84, 2],
-   [8, 86, 1], [9, 88, 1], [10, 89, 2], [12, 86, 2], [14, 84, 2]],
-
-  [[0, 84, 1], [1, 81, 1], [2, 77, 2], [4, 72, 1], [5, 77, 1], [6, 81, 2],
-   [8, 84, 2], [10, 81, 2], [12, 77, 2], [14, 72, 2]],
-
-  [[0, 83, 1], [1, 86, 1], [2, 88, 2], [4, 86, 1], [5, 83, 1], [6, 79, 2],
-   [8, 83, 1], [9, 86, 1], [10, 90, 2], [12, 88, 2], [14, 86, 2]],
-
-  [[0, 80, 2], [2, 83, 2], [4, 88, 2], [6, 83, 2], [8, 80, 4], [12, 76, 4]],
+  [[0, 69, 2], [2, 72, 2], [4, 76, 3], [8, 74, 2], [10, 72, 2], [12, 69, 4]],
+  [[0, 72, 2], [4, 77, 3], [8, 76, 2], [10, 72, 2], [12, 69, 2], [14, 72, 2]],
+  [[0, 71, 2], [2, 74, 2], [4, 79, 3], [8, 78, 2], [10, 74, 2], [12, 71, 4]],
+  [[0, 69, 3], [4, 76, 2], [6, 74, 2], [8, 72, 3], [12, 69, 4]],
+  [[0, 74, 2], [2, 77, 2], [4, 81, 3], [8, 79, 2], [10, 77, 2], [12, 74, 4]],
+  [[0, 72, 2], [4, 77, 3], [8, 81, 2], [10, 77, 2], [12, 72, 4]],
+  [[0, 71, 2], [2, 74, 2], [4, 79, 3], [8, 83, 2], [10, 79, 2], [12, 74, 4]],
+  [[0, 68, 3], [4, 71, 2], [6, 68, 2], [8, 64, 6]],
 ];
 
 let musicState = null;
@@ -1458,9 +1442,11 @@ function scheduleStep(index, time, dur) {
   const step  = index % MUSIC.stepsPerBar;
   const chord = CHORDS[bar];
 
-  // --- Bass: relentless staccato sixteenths ---
-  playTone(time, midiToFreq(chord.root + BASS[step]), dur * 0.55,
-           'square', 0.42, musicState.bassBus);
+  // --- Bass: octave-jumping eighths ---
+  if (step % 2 === 0) {
+    playTone(time, midiToFreq(chord.root + BASS[step / 2]), dur * 0.85,
+             'square', 0.5, musicState.bassBus);
+  }
 
   // --- Arpeggio: cycle the chord at 50 Hz ---
   const tones = chordTones(chord);
@@ -1478,12 +1464,9 @@ function scheduleStep(index, time, dur) {
   }
 
   // --- Drums ---
-  if (step === 0 || step === 8 || step === 11) playKick(time);
-  if (step === 4 || step === 12)               playNoiseHit(time, 0.14, 0.35, 1200);
-  if (step % 2 === 1)                          playNoiseHit(time, 0.03, 0.07, 6000);
-
-  // Roll into the top of the loop
-  if (bar === CHORDS.length - 1 && step >= 13) playNoiseHit(time, 0.09, 0.3, 1200);
+  if (step === 0 || step === 8)  playKick(time);
+  if (step === 4 || step === 12) playNoiseHit(time, 0.14, 0.35, 1200);
+  if (step % 2 === 1)            playNoiseHit(time, 0.03, 0.07, 6000);
 }
 
 function playTone(time, freq, dur, type, vol, dest, vibrato = false) {
