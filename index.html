@@ -333,15 +333,12 @@ const CONFIG = {
   reverseAccel:   9,
   maxReverseSpeed: 9,
 
-  // --- Steering ---
-  steerRate:      3.9,    // how fast heading builds while steering
-  steerReturn:    4.4,    // how fast heading self-centers
-  maxHeading:     0.62,   // radians — the car can never swing fully sideways
-  steerMinSpeed:  0.03,   // speed fraction below which steering barely bites
-  steerHighSpeedFalloff: 0,  // 0 = full authority at top speed (raise toward
-                             // 0.45 to make the car calmer when flat out)
-  gripLag:        11,     // lateral velocity response — lower = more slide
-  curveDrift:     1.0,    // how hard road curvature pushes the car outward
+  // --- Lane-change steering ---
+  // A and D pick a lane; the car slides across on its own.
+  laneChangeRate:     6.5,   // how briskly the car crosses (higher = snappier)
+  laneChangeMinSpeed: 0.12,  // speed fraction needed for a full-rate lane change
+  maxHeading:         0.5,   // radians — visual yaw cap while crossing
+  curveDrift:         0.35,  // how hard corners push the car wide in its lane
 
   wheelRadius:    0.42,
 
@@ -362,7 +359,7 @@ const CONFIG = {
 
   // --- Scoring ---
   pointsPerUnit:   0.55,  // base score rate per unit travelled
-  nearMissDist:    3.4,
+  nearMissDist:    4.6,   // one lane over — sized for lane-to-lane passes
   nearMissBonus:   75,
 
   // --- Look ---
@@ -398,10 +395,10 @@ let speedLines, speedLineData = [];
 // Car physics state
 const physics = {
   currentSpeed: 0,   // signed: negative = reversing
-  heading:      0,   // radians; 0 = straight down the road
-  steerInput:   0,   // -1 (left) .. +1 (right)
+  heading:      0,   // radians, derived from the slide — used for visuals only
   x:            0,   // lateral position, in road-local coordinates
-  lateralVel:   0,   // sideways velocity — gives the car weight
+  targetLane:   1,   // the lane the car is heading for (starts in the middle)
+  lateralVel:   0,   // sideways velocity, measured per frame
   wheelSpin:    0,
 };
 
@@ -417,7 +414,7 @@ const game = {
   awaitingRestartRelease: false,
 };
 
-const keys = { accelerate: false, brake: false, left: false, right: false };
+const keys = { accelerate: false, brake: false };
 let muted = false;
 
 // Reusable temporaries so the loop allocates nothing
@@ -1044,40 +1041,38 @@ function updatePhysics(dt) {
   }
   p.currentSpeed = clamp(p.currentSpeed, -CONFIG.maxReverseSpeed, CONFIG.maxSpeed);
 
-  // --- Steering ---
-  p.steerInput = game.state === 'driving' ? (keys.right ? 1 : 0) - (keys.left ? 1 : 0) : 0;
-
-  // Authority scales with speed: a stopped car cannot turn at all.
+  // --- Lane-change steering ---
+  // A and D pick a lane (see changeLane()); the car eases across on its own.
+  // Crossing still needs speed, so a stopped car stays where it is.
   const speedRatio = Math.abs(p.currentSpeed) / CONFIG.maxSpeed;
-  const grip       = smoothstep(0, CONFIG.steerMinSpeed * 4, speedRatio);
-  const authority  = grip * (1 - CONFIG.steerHighSpeedFalloff * speedRatio);
+  const mobility   = smoothstep(0, CONFIG.laneChangeMinSpeed, speedRatio);
+  const prevX      = p.x;
 
-  if (p.steerInput !== 0) {
-    p.heading += p.steerInput * CONFIG.steerRate * authority * dt;
-  } else {
-    p.heading -= p.heading * Math.min(1, CONFIG.steerReturn * dt);
-  }
-  p.heading = clamp(p.heading, -CONFIG.maxHeading, CONFIG.maxHeading);
+  p.x = THREE.MathUtils.lerp(
+    p.x,
+    LANE_X[p.targetLane],
+    1 - Math.exp(-CONFIG.laneChangeRate * mobility * dt)
+  );
 
-  // --- Lateral inertia ---
-  // Heading sets a *target* sideways velocity that the car eases into, so
-  // lane changes have weight instead of snapping.
-  const targetLateral = Math.sin(p.heading) * p.currentSpeed;
-  p.lateralVel = THREE.MathUtils.lerp(p.lateralVel, targetLateral, 1 - Math.exp(-CONFIG.gripLag * dt));
-
-  // Corners throw the car toward the outside of the bend
+  // Corners still throw the car wide before the lane hold reels it back in
   const drift = -curveBend(game.distance) * p.currentSpeed * p.currentSpeed * CONFIG.curveDrift;
-  p.x += (p.lateralVel + drift) * dt;
+  p.x += drift * dt;
+
+  // Everything visual is derived from how fast the car is actually sliding
+  p.lateralVel = dt > 0 ? (p.x - prevX) / dt : 0;
+  p.heading = clamp(
+    Math.atan2(p.lateralVel, Math.max(4, Math.abs(p.currentSpeed))),
+    -CONFIG.maxHeading,
+    CONFIG.maxHeading
+  );
 
   const forward = Math.cos(p.heading) * p.currentSpeed * dt;
 
-  // --- Clamp to the road (lanes plus a little of the shoulder) ---
+  // --- Clamp to the road ---
+  // The lane targets already sit well inside the asphalt; this only catches
+  // the drift a hard corner adds.
   const limit = ROAD_HALF + SHOULDER * 0.5 - CAR_HALF_W;
-  if (p.x > limit || p.x < -limit) {
-    p.x = clamp(p.x, -limit, limit);
-    p.heading *= 0.85;      // straighten out rather than grind along the edge
-    p.lateralVel = 0;
-  }
+  p.x = clamp(p.x, -limit, limit);
 
   // --- Advance down the road and score it ---
   game.distance += forward;
@@ -1091,7 +1086,7 @@ function updatePhysics(dt) {
   car.rotation.z = THREE.MathUtils.lerp(car.rotation.z, p.heading * 0.22, 1 - Math.exp(-8 * dt));
 
   // Front wheels turn slightly with the steering input
-  const targetSteerAngle = -p.steerInput * 0.55;
+  const targetSteerAngle = -clamp(p.lateralVel * 0.06, -0.55, 0.55);
   const wheelBlend = 1 - Math.exp(-12 * dt);
   frontLeftPivot.rotation.y  = THREE.MathUtils.lerp(frontLeftPivot.rotation.y,  targetSteerAngle, wheelBlend);
   frontRightPivot.rotation.y = THREE.MathUtils.lerp(frontRightPivot.rotation.y, targetSteerAngle, wheelBlend);
@@ -1297,11 +1292,12 @@ function crash() {
 function restart() {
   physics.currentSpeed = 0;
   physics.heading = 0;
-  physics.steerInput = 0;
-  physics.x = 0;
+  physics.x = LANE_X[1];
+  physics.targetLane = 1;
   physics.lateralVel = 0;
 
-  game.distance = 0;
+  // game.distance deliberately keeps running: the road segments and traffic
+  // are all positioned relative to it, and every run gets a different corner.
   game.score = 0;
   game.timeScale = 1;
   game.shake = 0;
@@ -1418,6 +1414,12 @@ function animate() {
 /* =========================================================================
    INPUT & EVENTS
    ========================================================================= */
+/** One tap = one lane. Repeats stack until the car runs out of road. */
+function changeLane(direction) {
+  if (game.state !== 'driving') return;
+  physics.targetLane = clamp(physics.targetLane + direction, 0, CONFIG.laneCount - 1);
+}
+
 function onKeyDown(event) {
   // WebAudio may only start from a user gesture
   initAudio();
@@ -1439,13 +1441,13 @@ function onKeyDown(event) {
 
     case 'KeyA':
     case 'ArrowLeft':
-      keys.left = true;
+      if (!event.repeat) changeLane(-1);   // held keys shouldn't machine-gun
       hideHint();
       break;
 
     case 'KeyD':
     case 'ArrowRight':
-      keys.right = true;
+      if (!event.repeat) changeLane(1);
       hideHint();
       break;
 
@@ -1468,10 +1470,6 @@ function onKeyUp(event) {
       break;
     case 'KeyM':
     case 'ArrowDown':  keys.brake = false; break;
-    case 'KeyA':
-    case 'ArrowLeft':  keys.left  = false; break;
-    case 'KeyD':
-    case 'ArrowRight': keys.right = false; break;
   }
 }
 
